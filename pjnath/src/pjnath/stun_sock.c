@@ -31,6 +31,7 @@
 #include <pj/os.h>
 #include <pj/pool.h>
 #include <pj/rand.h>
+#include <pj/compat/socket.h>
 
 #if 1
 #  define TRACE_(x)	PJ_LOG(5,x)
@@ -710,7 +711,7 @@ PJ_DEF(pj_status_t) pj_stun_sock_sendto( pj_stun_sock *stun_sock,
     pj_status_t status;
 
     PJ_ASSERT_RETURN(stun_sock && pkt && dst_addr && addr_len, PJ_EINVAL);
-    
+
     pj_grp_lock_acquire(stun_sock->grp_lock);
 
     if (!stun_sock->active_sock) {
@@ -730,6 +731,11 @@ PJ_DEF(pj_status_t) pj_stun_sock_sendto( pj_stun_sock *stun_sock,
 
     pj_grp_lock_release(stun_sock->grp_lock);
     return status;
+}
+
+PJ_DECL(pj_sock_t) pj_stun_sock_get_fd(pj_stun_sock *stun_sock)
+{
+	return stun_sock->sock_fd;
 }
 
 /* This callback is called by the STUN session to send packet */
@@ -753,6 +759,12 @@ static pj_status_t sess_on_send_msg(pj_stun_session *sess,
 
     pj_assert(token==INTERNAL_MSG_TOKEN);
     PJ_UNUSED_ARG(token);
+
+    PJ_LOG(1,("simon-dbg", "sess_on_send_msg ======================="));
+    int ttl = 64;
+    pj_status_t status = pj_sock_setsockopt(stun_sock->sock_fd, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
+    PJ_LOG(1,("simon-dbg", "set TTL return %d =======================", status));
+
 
     size = pkt_size;
     return pj_activesock_sendto(stun_sock->active_sock,

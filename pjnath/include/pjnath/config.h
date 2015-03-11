@@ -95,7 +95,7 @@
  * Default: 7 (as per RFC 3489-bis)
  */
 #ifndef PJ_STUN_MAX_TRANSMIT_COUNT
-#   define PJ_STUN_MAX_TRANSMIT_COUNT		    7
+#   define PJ_STUN_MAX_TRANSMIT_COUNT		    20
 #endif
 
 

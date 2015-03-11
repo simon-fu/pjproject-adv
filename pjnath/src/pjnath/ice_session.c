@@ -2103,7 +2103,18 @@ PJ_DEF(pj_status_t) pj_ice_sess_start_check(pj_ice_sess *ice)
      * instead to reduce stack usage:
      * return start_periodic_check(ice->stun_cfg.timer_heap, &clist->timer);
      */
+
     delay.sec = delay.msec = 0;
+
+    // Simon
+    if(ice->role == PJ_ICE_SESS_ROLE_CONTROLLING){
+    	delay.sec = 2;
+    	delay.msec = 0;
+    	PJ_LOG(4, ("simon-dbg", "controlling will start check after %ld seconds", delay.sec));
+    }else{
+    	PJ_LOG(4, ("simon-dbg", "controlled will start check after %ld seconds", delay.sec));
+    }
+
     status = pj_timer_heap_schedule_w_grp_lock(ice->stun_cfg.timer_heap,
                                                &clist->timer, &delay,
                                                PJ_TRUE, ice->grp_lock);
@@ -2453,6 +2464,7 @@ static pj_status_t on_stun_rx_request(pj_stun_session *sess,
 
     PJ_UNUSED_ARG(pkt);
     PJ_UNUSED_ARG(pkt_len);
+    PJ_LOG(1,("simon-dbg", "on_stun_rx_request %d bytes =======================", pkt_len));
     
     /* Reject any requests except Binding request */
     if (msg->hdr.type != PJ_STUN_BINDING_REQUEST) {

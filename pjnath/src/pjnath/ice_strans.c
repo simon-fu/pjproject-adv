@@ -158,6 +158,8 @@ typedef struct pj_ice_strans_comp
 
     unsigned		 default_cand;	/**< Default candidate.		*/
 
+    // Simon
+    int ttl;
 } pj_ice_strans_comp;
 
 
@@ -366,6 +368,9 @@ static pj_status_t create_comp(pj_ice_strans *ice_st, unsigned comp_id)
     comp = PJ_POOL_ZALLOC_T(ice_st->pool, pj_ice_strans_comp);
     comp->ice_st = ice_st;
     comp->comp_id = comp_id;
+
+    // Simon
+    comp->ttl = 5;
 
     ice_st->comp[comp_id-1] = comp;
 
@@ -1338,6 +1343,41 @@ static void on_ice_complete(pj_ice_sess *ice, pj_status_t status)
     pj_grp_lock_dec_ref(ice_st->grp_lock);
 }
 
+static void checkTTL(pj_ice_strans *ice_st,
+		pj_ice_strans_comp *comp,
+		const void *pkt, pj_size_t size){
+	pj_stun_msg_hdr hdr;
+	int ttl;
+	pj_status_t ttl_status;
+	pj_sock_t sock;
+
+	pj_ice_sess_role role = pj_ice_strans_get_role(ice_st);
+
+	if (comp->ttl < 64) {
+		if(role == PJ_ICE_SESS_ROLE_CONTROLLING){
+			PJ_LOG(4, ("simon-dbg", "comp %d change ttl to normal, controlling", comp->comp_id));
+			comp->ttl = 64;
+		}else if(role == PJ_ICE_SESS_ROLE_CONTROLLED){
+			pj_memcpy(&hdr, pkt, sizeof(pj_stun_msg_hdr));
+			hdr.type = pj_ntohs(hdr.type);
+			hdr.length = pj_ntohs(hdr.length);
+			hdr.magic = pj_ntohl(hdr.magic);
+			if (PJ_STUN_IS_SUCCESS_RESPONSE(hdr.type)) {
+				PJ_LOG(4, ("simon-dbg", "comp %d change ttl to normal, controlled", comp->comp_id));
+				comp->ttl = 64;
+
+			}
+		}else{
+			PJ_LOG(4, ("simon-dbg", "comp %d unknown role !!!", comp->comp_id));
+		}
+
+		sock = pj_stun_sock_get_fd(comp->stun_sock);
+		ttl = comp->ttl;
+		ttl_status = pj_sock_setsockopt(sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
+		PJ_LOG(4, ("simon-dbg", "set TTL to %d, return %d ===========================", ttl, ttl_status));
+	}
+}
+
 /*
  * Callback called by ICE session when it wants to send outgoing packet.
  */
@@ -1376,6 +1416,12 @@ static pj_status_t ice_tx_pkt(pj_ice_sess *ice,
 	    status = PJ_EINVALIDOP;
 	}
     } else if (transport_id == TP_STUN) {
+
+	// Simon
+	PJ_LOG(1,("simon-dbg", "ice_tx_pkt ======================="));
+	checkTTL(ice_st, comp, pkt, size);
+
+
 	status = pj_stun_sock_sendto(comp->stun_sock, NULL,
 				     pkt, (unsigned)size, 0,
 				     dst_addr, dst_addr_len);

@@ -646,6 +646,37 @@ PJ_DEF(pj_status_t) pj_sock_getsockname( pj_sock_t sock,
     }
 }
 
+
+//＃include <stdio.h>
+//#include <Foundation/Foundation.h>
+//int printf(const char * __restrict format, ...)
+//{
+//    va_list args;
+//    va_start(args,format);
+//    NSLogv([NSString stringWithUTF8String:format], args) ;
+//    va_end(args);
+//    return 1;
+//}
+
+
+#include <pjlib.h>
+#define prn(...) PJ_LOG(4, (__BASE_FILE__, __VA_ARGS__))
+//#define dbgd(...) do{ printf("[DEBUG] " __VA_ARGS__);}while(0)
+//#define dbgi(...) do{ printf("[INFO ] " __VA_ARGS__);}while(0)
+//#define dbgw(...) do{ printf("[WARN ] " __VA_ARGS__);}while(0)
+//#define dbge(...) do{ printf("[ERROR] " __VA_ARGS__);}while(0)
+
+
+#define EMLog1(x, ...) switch (x) { \
+case Debug1: { PJ_LOG(4, (__BASE_FILE__, __VA_ARGS__)); } break; \
+case Info1 : { PJ_LOG(3, (__BASE_FILE__, __VA_ARGS__)); } break; \
+case Warn1 : { PJ_LOG(2, (__BASE_FILE__, __VA_ARGS__)); } break; \
+case Error1: { PJ_LOG(1, (__BASE_FILE__, __VA_ARGS__)); } break; \
+}
+#define dbgi(...) PJ_LOG(4, (__FILE__, __VA_ARGS__))
+//#define dbgd(...) do{ PJ_LOG(4, (__BASE_FILE__, "[DEBUG] "__VA_ARGS__); }while(0)
+//#define dbgi(...) do{ PJ_LOG(3, (__BASE_FILE__, "[INFO ] "__VA_ARGS__); }while(0)
+
 /*
  * Send data
  */
@@ -661,6 +692,8 @@ PJ_DEF(pj_status_t) pj_sock_send(pj_sock_t sock,
     /* Suppress SIGPIPE. See https://trac.pjsip.org/repos/ticket/1538 */
     flags |= MSG_NOSIGNAL;
 #endif
+
+    dbgi("send %d bytes to\n", *len);
 
     *len = send(sock, (const char*)buf, (int)(*len), flags);
 
@@ -685,6 +718,9 @@ PJ_DEF(pj_status_t) pj_sock_sendto(pj_sock_t sock,
     PJ_ASSERT_RETURN(len, PJ_EINVAL);
     
     CHECK_ADDR_LEN(to, tolen);
+
+    const struct sockaddr_in * addr = (const struct sockaddr_in*) to;
+    dbgi("send %d bytes to %s:%d\n", *len, inet_ntoa(addr->sin_addr), ntohs(addr->sin_port));
 
     *len = sendto(sock, (const char*)buf, (int)(*len), flags, 
 		  (const struct sockaddr*)to, tolen);

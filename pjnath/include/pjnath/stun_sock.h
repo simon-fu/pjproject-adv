@@ -485,6 +485,10 @@ PJ_DECL(pj_status_t) pj_stun_sock_sendto(pj_stun_sock *stun_sock,
 					 const pj_sockaddr_t *dst_addr,
 					 unsigned addr_len);
 
+// by Simon
+PJ_DECL(pj_sock_t) pj_stun_sock_get_fd(pj_stun_sock *stun_sock);
+
+
 /**
  * @}
  */

@@ -209,11 +209,17 @@ static pj_status_t tsx_transmit_msg(pj_stun_client_tsx *tsx,
 	    tsx->retransmit_time.sec = 0;
 	    tsx->retransmit_time.msec = tsx->rto_msec;
 
-	} else if (tsx->transmit_count < PJ_STUN_MAX_TRANSMIT_COUNT-1) {
+//	} else if (tsx->transmit_count < PJ_STUN_MAX_TRANSMIT_COUNT-1) {
+//	    unsigned msec;
+//
+//	    msec = PJ_TIME_VAL_MSEC(tsx->retransmit_time);
+//	    msec <<= 1;
+//	    tsx->retransmit_time.sec = msec / 1000;
+//	    tsx->retransmit_time.msec = msec % 1000;
+	} else if (tsx->transmit_count < (PJ_STUN_MAX_TRANSMIT_COUNT-1)) {
+		// Simon
 	    unsigned msec;
-
-	    msec = PJ_TIME_VAL_MSEC(tsx->retransmit_time);
-	    msec <<= 1;
+	    msec = 500;
 	    tsx->retransmit_time.sec = msec / 1000;
 	    tsx->retransmit_time.msec = msec % 1000;
 

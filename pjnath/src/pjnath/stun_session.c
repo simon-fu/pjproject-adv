@@ -1462,20 +1462,21 @@ PJ_DEF(pj_status_t) pj_stun_session_on_rx_pkt(pj_stun_session *sess,
     if (PJ_STUN_IS_SUCCESS_RESPONSE(msg->hdr.type) ||
 	PJ_STUN_IS_ERROR_RESPONSE(msg->hdr.type))
     {
+    PJ_LOG(1,("simon-dbg", "incoming respose ======================="));
 	status = on_incoming_response(sess, options, 
 				      (const pj_uint8_t*) packet, 
 				      (unsigned)pkt_size, msg, 
 				      src_addr, src_addr_len);
 
     } else if (PJ_STUN_IS_REQUEST(msg->hdr.type)) {
-
+    PJ_LOG(1,("simon-dbg", "incoming request ======================="));
 	status = on_incoming_request(sess, options, token, sess->rx_pool, 
 				     (const pj_uint8_t*) packet, 
 				     (unsigned)pkt_size, 
 				     msg, src_addr, src_addr_len);
 
     } else if (PJ_STUN_IS_INDICATION(msg->hdr.type)) {
-
+    PJ_LOG(1,("simon-dbg", "incoming indication ======================="));
 	status = on_incoming_indication(sess, token, sess->rx_pool, 
 					(const pj_uint8_t*) packet, 
 					(unsigned)pkt_size, msg, src_addr, 
