@@ -1,0 +1,117 @@
+关于 symmetric vs port cone
+＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝
+symmetric方打开640个socket，发送给cone方；cone方随机选择640个port发送给symmetric方，根据birthday paradox生日攻击理论，大约有99%的可能穿透
+原文见 https://www.ietf.org/mail-archive/web/behave/current/msg03088.html
+
+> > Actually, if one side is symmetric and the other side is restricted
+> cone,
+> > won't TURN still be needed?
+> ...
+>
+> If the other side is address restricted, it will still go direct as
+> long
+> the as the guy behind the symmetric NAT has a NAT with just a single
+> external IP. If the other side is address and port restricted, you are
+> correct a TURN server would be used.
+
+Actually, that is not necessary. Suppose that the host behind the symmetric NAT opens 256 sockets, with 256 different port numbers, and sends on each socket a "bubble" towards the IP+Port of the port-restricted NAT. Suppose then that the host behind the restricted NAT picks 256 random port numbers, and sends 256 bubbles to the IP address of the symmetric NAT, each with a different random port number. The birthday paradox tells that there is a 63% chance that at least one bubble will pass through. If you are willing to open more sockets, say 640, and send 640 bubbles, the chances increase to well over 99%.
+
+-- Christian Huitema
+
+
+关于p2p：
+NAT 类型主要分为 cone 和 symmetric 两种（其实cone还可分为3种类型）
+wifi一般是cone，移动互联网一般是 symmetric
+
+
+现状和目标：
+1、wifi vs wifi （cone vs cone）： 
+理论上100%可通，目前我们的打通率不高，android和iOS更是几乎通不了；
+目标是做到100%可通；
+优先级高；
+
+2、移动网 vs wifi （symmetric vs cone）：
+ice打不通这种组合的，所以目前我们打通率接近0%，
+根据一些老外的研究，是可以打通部分的，有一些文章宣称可以做到打通率90%以上
+我认为做到90%是有点困难，但至少说明还有改善空间
+优先级中；
+
+3、移动网 vs 移动网 （symmetric vs symmetric）
+这个是很难打通，大部分文章都说这种组合直接放弃，只能走relay。
+可以这么做：尝试去打，如果打通，把打通结果报告给后台
+经过一段时间后，可以分析积累的数据，也许能找到一些规律，提升打通率；
+优先级低
+
+总的来说，我们先保证1，后续再实现2和3 
+
+
+
+
+
+0: [1] 222.129.235.80:53373-->106.117.105.29:28550 (nominated, state=Succeeded)
+1: [2] 222.129.235.80:59685-->106.117.105.29:28551 (nominated, state=Succeeded)
+
+23:34:22.420 /Users/simon/D  .[0]-local : comp 1, addr 222.129.235.80, port 53373, raddr 192.168.1.204, rport=53373
+23:34:22.420 /Users/simon/D  .[0]-remote: comp 1, addr 106.117.105.29, port 28550, raddr 106.117.105.29, rport=28550
+23:34:22.420 /Users/simon/D  .[1]-local : comp 2, addr 222.129.235.80, port 59685, raddr 192.168.1.204, rport=59685
+23:34:22.420 /Users/simon/D  .[1]-remote: comp 2, addr 106.117.105.29, port 28551, raddr 106.117.105.29, rport=28551
+
+
+line:413 at funtion :VoeBase_StartSend,last error:0,ret:0VoeClient_FullDuplexSpeech success2015-02-23 23:34:32.612 ChatDemo-UI2.0[2603:1178961] -------localIP:192.168.1.204------localPort:53373------Port:28550-----IP:106.117.105.29--------SessionId:b713043b
+2015-02-23 23:34:32:612 ChatDemo-UI2.0[2603:a843] -------localIP:192.168.1.204------localPort:53373------Port:28550-----IP:106.117.105.29--------SessionId:b713043b
+
+
+
+抓包
+＝＝＝
+
+ssh 登陆 10.0.1.1的10022端口，用户名 admin，密码 easemob
+ssh admin@10.0.1.1 -p 10022
+
+依次输入
+tool
+sniffer
+
+然后输入print，查看当前设置。
+
+你抓包时需要修改的项目：
+1.路由器外网
+set interface=ether1-wan
+
+2.路由器内网
+set interface=ether6-lan
+
+3.通过ip设置抓包条件
+set filter-ip-address=180.97.33.108/32 
+set filter-ip-address=114.252.39.169/32  (simon home ip)
+公网ip根据情况修改
+
+4.通过start或stop 启动或关闭抓包服务。
+
+注意：
+1.默认数据包会发到10.0.1.66上，如果你要修改，命令如下：
+set streaming-server=10.0.1.66
+
+2.抓包命令是：
+tcpdump -s0 -iem1 -wwlan.pcap "host 10.0.1.1" 
+原因是centos或tcpdump好像不支持Tazmen Sniffer Protocol (TZSP) ，不能用真实包的源和目标ip做条件。
+
+
+tcpdump -i em1 -s0 -wwlan.pcap "host 10.0.1.1"
+tcpdump -i em2 -s0 -wlan.pcap "host 10.0.1.195" 
+scp -P 18822 root@106.2.206.194:/root/simon-fu/p2p/lan.pcap ./call8-lan-android-ok.pcap
+
+
+/ip firewall nat add chain=srcnat src-address="<ip>" action=log
+[admin@MikroTik] /ip firewall nat> set chain=srcnat action=log src-address=10.0.1.195 numbers=0
+[admin@MikroTik] /ip firewall nat> move destination=0 numbers=1 
+[admin@MikroTik] /ip firewall connection> print detail where protocol="udp"
+/ip firewall connection print detail where src-address~"10.0.1.195:"
+/var/log/routeros.log
+
+rvictl -s cdfe0aa84bbb635a9bd3b26e3a445192e49febf2
+
+
+call4-lan: 		no.11, id = 40185
+call4-wlan:		no.813, id = 40185 
+
