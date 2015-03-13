@@ -71,11 +71,27 @@ $ vi config_site.h
 #define PJ_CONFIG_IPHONE 1
 #include <pj/config_site_sample.h>
 
-$ ARCH='-arch arm64' ./configure-iphone
+
+step 1: 清除原有配置和中间文件
+$ make distclean
+
+step 2a:
+$ export DEVPATH=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer
+$ ARCH="-arch i386" CFLAGS="-O2 -m32 -mios-simulator-version-min=5.0" LDFLAGS="-O2 -m32 -mios-simulator-version-min=5.0" ./configure-iphone
+$ ARCH="-arch x86_64" CFLAGS="-O2 -m32 -mios-simulator-version-min=5.0" LDFLAGS="-O2 -m32 -mios-simulator-version-min=5.0" ./configure-iphone
+
+step 2b:
+$ export DEVPATH=
 $ ARCH='-arch armv7' ./configure-iphone
+$ ARCH='-arch armv7s' ./configure-iphone
+$ ARCH='-arch arm64' ./configure-iphone
+
+setp 3:
 $ make dep && make clean && make
 
-清除原有配置和中间文件 make distclean
+
+
+
 
 发送stun包的地方 sess_on_send_msg  （stun_sock.c）
 

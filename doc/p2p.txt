@@ -112,6 +112,9 @@ scp -P 18822 root@106.2.206.194:/root/simon-fu/p2p/lan.pcap ./call8-lan-android-
 rvictl -s cdfe0aa84bbb635a9bd3b26e3a445192e49febf2
 
 
+xieyajie, xyjxyf12
+
+
 call4-lan: 		no.11, id = 40185
 call4-wlan:		no.813, id = 40185 
 

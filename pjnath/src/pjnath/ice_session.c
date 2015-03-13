@@ -2107,13 +2107,13 @@ PJ_DEF(pj_status_t) pj_ice_sess_start_check(pj_ice_sess *ice)
     delay.sec = delay.msec = 0;
 
     // Simon
-    if(ice->role == PJ_ICE_SESS_ROLE_CONTROLLING){
-    	delay.sec = 2;
-    	delay.msec = 0;
-    	PJ_LOG(4, ("simon-dbg", "controlling will start check after %ld seconds", delay.sec));
-    }else{
-    	PJ_LOG(4, ("simon-dbg", "controlled will start check after %ld seconds", delay.sec));
-    }
+//    if(ice->role == PJ_ICE_SESS_ROLE_CONTROLLING){
+//    	delay.sec = 2;
+//    	delay.msec = 0;
+//    	PJ_LOG(4, ("simon-dbg", "controlling will start check after %ld seconds", delay.sec));
+//    }else{
+//    	PJ_LOG(4, ("simon-dbg", "controlled will start check after %ld seconds", delay.sec));
+//    }
 
     status = pj_timer_heap_schedule_w_grp_lock(ice->stun_cfg.timer_heap,
                                                &clist->timer, &delay,

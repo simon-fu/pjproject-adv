@@ -160,6 +160,7 @@ typedef struct pj_ice_strans_comp
 
     // Simon
     int ttl;
+    unsigned ttl_sent_count;
 } pj_ice_strans_comp;
 
 
@@ -1130,6 +1131,27 @@ PJ_DEF(pj_status_t) pj_ice_strans_start_ice( pj_ice_strans *ice_st,
     }
 
     ice_st->state = PJ_ICE_STRANS_STATE_NEGO;
+
+    // Simon
+    // wait for controlled role send punch packet
+    pj_ice_sess_role role = pj_ice_strans_get_role(ice_st);
+    if(role == PJ_ICE_SESS_ROLE_CONTROLLED){
+    	while(1){
+			int comp_num = 0;
+			unsigned i;
+			for (i = 0; i < ice_st->comp_cnt; ++i) {
+				pj_ice_strans_comp *comp = ice_st->comp[i];
+				if (comp->ttl_sent_count >= 1) {
+					comp_num++;
+				}
+			}
+			if(comp_num == ice_st->comp_cnt) break;
+			pj_thread_sleep(50);
+    	}
+    	PJ_LOG(1,("simon-dbg", "controlled role initial punch done"));
+    }
+
+
     return status;
 }
 
@@ -1357,6 +1379,7 @@ static void checkTTL(pj_ice_strans *ice_st,
 		if(role == PJ_ICE_SESS_ROLE_CONTROLLING){
 			PJ_LOG(4, ("simon-dbg", "comp %d change ttl to normal, controlling", comp->comp_id));
 			comp->ttl = 64;
+			comp->ttl_sent_count = 65535;
 		}else if(role == PJ_ICE_SESS_ROLE_CONTROLLED){
 			pj_memcpy(&hdr, pkt, sizeof(pj_stun_msg_hdr));
 			hdr.type = pj_ntohs(hdr.type);
@@ -1365,7 +1388,6 @@ static void checkTTL(pj_ice_strans *ice_st,
 			if (PJ_STUN_IS_SUCCESS_RESPONSE(hdr.type)) {
 				PJ_LOG(4, ("simon-dbg", "comp %d change ttl to normal, controlled", comp->comp_id));
 				comp->ttl = 64;
-
 			}
 		}else{
 			PJ_LOG(4, ("simon-dbg", "comp %d unknown role !!!", comp->comp_id));
@@ -1374,7 +1396,8 @@ static void checkTTL(pj_ice_strans *ice_st,
 		sock = pj_stun_sock_get_fd(comp->stun_sock);
 		ttl = comp->ttl;
 		ttl_status = pj_sock_setsockopt(sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
-		PJ_LOG(4, ("simon-dbg", "set TTL to %d, return %d ===========================", ttl, ttl_status));
+		PJ_LOG(4, ("simon-dbg", "comp %d set TTL to %d, return %d ===============", comp->comp_id, ttl, ttl_status));
+		comp->ttl_sent_count++;
 	}
 }
 
