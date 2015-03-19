@@ -96,4 +96,8 @@ $ make dep && make clean && make
 发送stun包的地方 sess_on_send_msg  （stun_sock.c）
 
 
+- (id)initWithCandidateNode:(NSXMLElement *)candidateNode;
+- (NSXMLElement *)toElement;
+
+
 

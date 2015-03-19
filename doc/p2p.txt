@@ -118,3 +118,15 @@ xieyajie, xyjxyf12
 call4-lan: 		no.11, id = 40185
 call4-wlan:		no.813, id = 40185 
 
+
+jingle actions
+==============
+SESSION_INITIATE
+SESSION_ACCEPT
+CALL_ACCEPT
+SESSION_TERMINATE
+
+
+
+
+
