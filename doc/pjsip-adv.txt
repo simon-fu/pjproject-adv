@@ -1,0 +1,106 @@
+pjsip-adv
+
+icedemo 调用流程
+＝＝＝＝＝＝＝＝＝
+icedemo_init
+	CHECK( pj_init() );
+	CHECK( pjlib_util_init() );
+	CHECK( pjnath_init() );
+	初始化配置信息： pj_ice_strans_cfg	 ice_cfg;
+
+icedemo_create_instance
+	初始化回调 pj_ice_strans_cb icecb;
+	创建 trans（调用 pj_ice_strans_create ，如果指定了stun服务器，这里会获取外网地址）
+
+icedemo_init_session
+	创建session （调用 pj_ice_strans_init_ice，gathering candidates）
+
+icedemo_input_remote
+	ufrag
+	pwd
+	candidate
+
+icedemo_start_nego
+	pj_ice_strans_start_ice
+
+cb_on_ice_complete
+	回调结果（包括初始化和协商的结果）
+
+icedemo_send_data
+	发送数据 pj_ice_strans_sendto
+
+icedemo_stop_session
+	pj_ice_strans_stop_ice
+
+icedemo_destroy_instance
+	pj_ice_strans_destroy
+
+
+sdk 添加ice log
+＝＝＝＝＝＝＝＝＝
+EMIceConfig.m
+	NSArray *yStoreFilePath            =    NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES);
+    NSString *yDoucumentsDirectiory    =    [yStoreFilePath objectAtIndex:0];
+    NSString *savePathY                =    [yDoucumentsDirectiory stringByAppendingPathComponent:@"EaseMobLog/icelog.txt"];
+    _logFilename = savePathY;
+ice_common_defs.h
+	#define MAX_ACCOUNT_SIZE 1024 // simon 80
+
+
+negotiate 的线程里不能EM_LOG1
+
+- (void)xmpp:(XMPPManager *)xmpp didCallStatusChanged:(XMPPCallStatus)callStatus xmppSession:(XMPPCallSession *)xmppSession
+ 	localIpStr = localCandidate.raddr;
+ 	localPortStr = localCandidate.rport;
+
+
+测试异常用例
+＝＝＝＝＝＝
+在振铃时断网
+在通话过程中，断网
+
+
+build pjsip
+===========
+http://trac.pjsip.org/repos/wiki/Getting-Started/iPhone
+http://www.cnblogs.com/prinsun/p/build_pjsip_mutil_target_supports.html
+
+modify pjlib/include/pj/config_site.h
+$ cd pjlib/include/pj/
+$ vi config_site.h
+#define PJ_CONFIG_IPHONE 1
+#include <pj/config_site_sample.h>
+
+
+step 1: 清除原有配置和中间文件
+$ make distclean
+
+step 2a:
+$ export DEVPATH=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer
+$ ARCH="-arch i386" CFLAGS="-O2 -m32 -mios-simulator-version-min=5.0" LDFLAGS="-O2 -m32 -mios-simulator-version-min=5.0" ./configure-iphone
+$ ARCH="-arch x86_64" CFLAGS="-O2 -m32 -mios-simulator-version-min=5.0" LDFLAGS="-O2 -m32 -mios-simulator-version-min=5.0" ./configure-iphone
+
+step 2b:
+$ export DEVPATH=
+$ ARCH='-arch armv7' ./configure-iphone
+$ ARCH='-arch armv7s' ./configure-iphone
+$ ARCH='-arch arm64' ./configure-iphone
+
+setp 3:
+$ make dep && make clean && make
+
+
+TARGET_ABI=armeabi ./configure-android --use-ndk-cflags
+TARGET_ABI=armeabi-v7a ./configure-android --use-ndk-cflags
+
+APP_PLATFORM=android-19 TARGET_ABI=armeabi ./configure-android --use-ndk-cflags
+
+
+发送stun包的地方 sess_on_send_msg  （stun_sock.c）
+
+
+- (id)initWithCandidateNode:(NSXMLElement *)candidateNode;
+- (NSXMLElement *)toElement;
+
+
+
