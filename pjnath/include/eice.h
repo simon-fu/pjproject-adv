@@ -24,7 +24,7 @@ int eice_new_callee(const char* config, const char * remote_content, int remote_
 int eice_caller_nego(eice_t obj, const char * remote_content, int remote_content_len,
 		eice_on_nego_result_t cb, void * cbContext );
 
-int eice_callee_nego(eice_t obj);
+//int eice_callee_nego(eice_t obj);
 
 int eice_get_nego_result(eice_t obj, char * nego_result, int * p_nego_result_len);
 
@@ -34,9 +34,9 @@ void eice_free(eice_t obj);
 int eice_test();
 
 
-int eice_get_local(eice_t obj, char * buf, int * p_buf_len);
-int eice_start_nego(eice_t obj, const char * remote_content, int remote_content_len);
-int eice_wait_nego(eice_t obj, char * buf, int * p_buf_len);
+//int eice_get_local(eice_t obj, char * buf, int * p_buf_len);
+//int eice_start_nego(eice_t obj, const char * remote_content, int remote_content_len);
+//int eice_wait_nego(eice_t obj, char * buf, int * p_buf_len);
 
 
 

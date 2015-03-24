@@ -78,6 +78,15 @@ static struct eice_context * g_eice = 0;
 static int eice_worker_thread(void *arg);
 static pj_status_t handle_events(eice_t obj, unsigned max_msec, unsigned *p_count);
 
+#define REGISTER_THREAD pj_thread_t *pthread = NULL; \
+pj_thread_desc desc; \
+pj_bool_t has_registered = PJ_FALSE; \
+has_registered = pj_thread_is_registered(); \
+if(!has_registered) { \
+if (pj_thread_register(NULL, desc, &pthread) == PJ_SUCCESS) { \
+} \
+}
+
 
 static void log_func_4pj(int level, const char *data, int len) {
 
@@ -548,7 +557,7 @@ int eice_new(const char* config, pj_ice_sess_role role, eice_t * pobj) {
 void eice_free(eice_t obj){
 	if(!obj) return ;
 
-//    REGISTER_THREAD;
+    REGISTER_THREAD;
 
 	if(obj->local_content){
 		delete obj->local_content;
@@ -615,6 +624,7 @@ int eice_new_caller(const char* config, char * local_content,
 		int * p_local_content_len, eice_t * pobj) {
 	int ret = -1;
 	eice_t obj = 0;
+    REGISTER_THREAD
 	do{
 		ret = eice_new(config, PJ_ICE_SESS_ROLE_CONTROLLING, &obj);
 		if(ret){
@@ -770,6 +780,7 @@ int eice_new_callee(const char* config, const char * remote_content, int remote_
 		eice_t * pobj){
 	int ret = -1;
 	eice_t obj = 0;
+    REGISTER_THREAD
 	do {
 		ret = eice_new(config, PJ_ICE_SESS_ROLE_CONTROLLED, &obj);
 		if (ret) {
@@ -799,6 +810,7 @@ int eice_caller_nego(eice_t obj, const char * remote_content, int remote_content
 		eice_on_nego_result_t cb, void * cbContext )
 {
 	int ret = -1;
+    REGISTER_THREAD
 	do{
 		ret = eice_start_nego(obj, remote_content, remote_content_len);
 		if (ret != 0) {
@@ -814,6 +826,9 @@ int eice_caller_nego(eice_t obj, const char * remote_content, int remote_content
 int eice_get_nego_result(eice_t obj, char * nego_result, int * p_nego_result_len){
 	int nego_done=0;
 	pj_status_t nego_status;
+    
+    REGISTER_THREAD
+    
 	pj_lock_acquire(obj->lock);
 	nego_done = obj->ice_nego_done;
 	nego_status = obj->ice_nego_status;

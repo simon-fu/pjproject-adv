@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F493483A1AB9903100B1B318 /* eice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F49348391AB9903100B1B318 /* eice.cpp */; };
-		F493483E1AB9911C00B1B318 /* jsoncpp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F493483D1AB9911C00B1B318 /* jsoncpp.cpp */; };
+		F4CE61D41AC1B7C300ED62D7 /* eice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F4CE61D31AC1B7C300ED62D7 /* eice.cpp */; };
+		F4CE61D61AC1B81400ED62D7 /* jsoncpp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F4CE61D51AC1B81400ED62D7 /* jsoncpp.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -26,9 +26,9 @@
 /* Begin PBXFileReference section */
 		F493481C1AB98A6E00B1B318 /* libeice.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libeice.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		F493482D1AB98A6E00B1B318 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		F49348381AB98AE800B1B318 /* eice.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = eice.h; path = ../../../pjnath/include/eice.h; sourceTree = "<group>"; };
-		F49348391AB9903100B1B318 /* eice.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = eice.cpp; path = ../../../pjnath/src/pjnath/eice.cpp; sourceTree = "<group>"; };
-		F493483D1AB9911C00B1B318 /* jsoncpp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = jsoncpp.cpp; path = ../../../pjnath/src/pjnath/jsoncpp.cpp; sourceTree = "<group>"; };
+		F4CE61D31AC1B7C300ED62D7 /* eice.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = eice.cpp; path = ../../pjnath/src/pjnath/eice.cpp; sourceTree = SOURCE_ROOT; };
+		F4CE61D51AC1B81400ED62D7 /* jsoncpp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = jsoncpp.cpp; path = ../../pjnath/src/pjnath/jsoncpp.cpp; sourceTree = SOURCE_ROOT; };
+		F4CE61D71AC1B82600ED62D7 /* eice.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = eice.h; path = ../../pjnath/include/eice.h; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,9 +62,9 @@
 		F493481E1AB98A6E00B1B318 /* eice */ = {
 			isa = PBXGroup;
 			children = (
-				F493483D1AB9911C00B1B318 /* jsoncpp.cpp */,
-				F49348391AB9903100B1B318 /* eice.cpp */,
-				F49348381AB98AE800B1B318 /* eice.h */,
+				F4CE61D71AC1B82600ED62D7 /* eice.h */,
+				F4CE61D51AC1B81400ED62D7 /* jsoncpp.cpp */,
+				F4CE61D31AC1B7C300ED62D7 /* eice.cpp */,
 			);
 			path = eice;
 			sourceTree = "<group>";
@@ -141,8 +141,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F493483A1AB9903100B1B318 /* eice.cpp in Sources */,
-				F493483E1AB9911C00B1B318 /* jsoncpp.cpp in Sources */,
+				F4CE61D41AC1B7C300ED62D7 /* eice.cpp in Sources */,
+				F4CE61D61AC1B81400ED62D7 /* jsoncpp.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
