@@ -959,6 +959,10 @@ static int eice_worker_thread(void *arg) {
     return 0;
 }
 
+void eice_set_log_func(eice_log_func * log_func){
+    pj_log_set_log_func(log_func);
+}
+
 
 
 int eice_test(){
@@ -996,5 +1000,9 @@ int eice_test(){
     
     return ret;
 }
+
+
+
+
 
 

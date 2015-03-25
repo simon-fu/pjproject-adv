@@ -10,6 +10,7 @@ extern "C"{
 typedef struct eice_st* eice_t;
 typedef void    (*eice_on_nego_result_t)(eice_t obj, void * cbContext,
 		const char * nego_result, int nego_result_len);
+typedef void eice_log_func(int level, const char *data, int len);
 
 int eice_init();
 void eice_exit();
@@ -29,6 +30,8 @@ int eice_caller_nego(eice_t obj, const char * remote_content, int remote_content
 int eice_get_nego_result(eice_t obj, char * nego_result, int * p_nego_result_len);
 
 void eice_free(eice_t obj);
+
+void eice_set_log_func(eice_log_func * log_func);
 
 
 int eice_test();
