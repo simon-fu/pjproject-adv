@@ -4,6 +4,11 @@
 <dict>
 	<key>SchemeUserState</key>
 	<dict>
+		<key>eice-universal.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>1</integer>
+		</dict>
 		<key>eice.xcscheme</key>
 		<dict>
 			<key>orderHint</key>
@@ -12,12 +17,17 @@
 	</dict>
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
-		<key>F493481B1AB98A6E00B1B318</key>
+		<key>F4CE61EB1AC2EC7300ED62D7</key>
 		<dict>
 			<key>primary</key>
 			<true/>
 		</dict>
-		<key>F49348261AB98A6E00B1B318</key>
+		<key>F4CE61F61AC2EC7300ED62D7</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>F4CE62111AC2F0AD00ED62D7</key>
 		<dict>
 			<key>primary</key>
 			<true/>
