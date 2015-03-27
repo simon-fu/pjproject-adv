@@ -969,6 +969,8 @@ int eice_test(){
     const char * config_json = "{\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,\"compCount\":2}";
     int ret = 0;
 
+    eice_init();
+    
     char caller_content[512];
     int caller_content_len = 0;
     eice_t caller = 0;
@@ -997,6 +999,8 @@ int eice_test(){
 
     eice_free(caller);
     eice_free(callee);
+    
+    eice_exit();
     
     return ret;
 }
