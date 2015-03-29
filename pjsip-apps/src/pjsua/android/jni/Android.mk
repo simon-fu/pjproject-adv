@@ -24,6 +24,9 @@ MY_JNI_DIR	:= jni
 # Android build settings
 LOCAL_MODULE    := libpjsua
 LOCAL_CFLAGS    := -Werror $(APP_CFLAGS) -frtti
+# simon
+LOCAL_CFLAGS += -fexceptions 
+
 LOCAL_LDFLAGS   := $(APP_LDFLAGS)
 LOCAL_LDLIBS    := $(MY_MODULES) $(APP_LDLIBS)
 LOCAL_SRC_FILES := $(MY_JNI_WRAP) pjsua_app_callback.cpp

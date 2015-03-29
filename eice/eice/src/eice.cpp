@@ -68,6 +68,10 @@ struct eice_st{
 
     pj_ice_sess_cand remote_cands[MAX_CANDIDATE_COUNT];
     int remote_cand_count;
+
+    
+    char err_str[1024];
+
 };
 
 
@@ -248,6 +252,10 @@ static void cb_on_ice_complete(pj_ice_strans *ice_st, pj_ice_strans_op op,
 		pj_status_t status) {
 //	REGISTER_THREAD;
 
+
+    dbge("cb_on_ice_complete: op=%d", op);
+    
+
 	switch (op) {
 	case PJ_ICE_STRANS_OP_INIT: {
 		dbgi("ice init result : %s", status == PJ_SUCCESS ? "OK" : "FAIL");
@@ -269,7 +277,7 @@ static void cb_on_ice_complete(pj_ice_strans *ice_st, pj_ice_strans_op op,
 	}
 		break;
 	default: {
-		dbge("unknown operation:%d.", op);
+		dbge("unknown operation:%d", op);
 	}
 		break;
 	} // end of switch
@@ -455,7 +463,8 @@ int eice_new(const char* config, pj_ice_sess_role role, eice_t * pobj) {
 				cfg->comp_count, obj, &icecb,
 				&obj->icest);
 		if (ret != PJ_SUCCESS) {
-			dbge("error creating ice strans, ret=%d", ret);
+            pj_str_t es = pj_strerror(ret, obj->err_str, sizeof(obj->err_str));
+			dbge("error creating ice strans, ret=%d(%s)", ret, es.ptr);
 			break;
 		}
 
@@ -537,7 +546,9 @@ int eice_new(const char* config, pj_ice_sess_role role, eice_t * pobj) {
 
 		Json::FastWriter writer;
 		obj->local_content = new std::string(writer.write(json_val));
-		dbgi("local-content=  %s\n", obj->local_content->c_str());
+
+		dbgi("local-content= %s\n", obj->local_content->c_str());
+
 
 //		std::string sytled_str = json_val.toStyledString();
 //		dbgi("styled-local-content=  %s\n", sytled_str.c_str());
@@ -630,6 +641,13 @@ int eice_new_caller(const char* config, char * local_content,
 		if(ret){
 			break;
 		}
+
+
+//        dbgi("obj->local_content = %p", obj->local_content);
+//        dbgi("obj->local_content->size() = %d", obj->local_content->size());
+//        dbgi("local_content = %p", local_content);
+//        dbgi("p_local_content_len = %p", p_local_content_len);
+        
 
 		strcpy(local_content, obj->local_content->c_str());
 		*p_local_content_len = obj->local_content->size();

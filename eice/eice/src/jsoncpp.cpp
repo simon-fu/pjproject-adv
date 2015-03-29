@@ -2976,6 +2976,13 @@ Value& Path::make(Value& root) const {
 #include <iomanip>
 #include <math.h>
 
+
+#if defined(__ANDROID__)
+#include <cmath>
+#define isfinite std::isfinite
+#endif
+
+
 #if defined(_MSC_VER) && _MSC_VER < 1500 // VC++ 8.0 and below
 #include <float.h>
 #define isfinite _finite

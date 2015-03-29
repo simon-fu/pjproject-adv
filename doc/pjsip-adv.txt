@@ -65,6 +65,10 @@ build pjsip
 http://trac.pjsip.org/repos/wiki/Getting-Started/iPhone
 http://www.cnblogs.com/prinsun/p/build_pjsip_mutil_target_supports.html
 
+
+
+build for iOS
+-------------
 modify pjlib/include/pj/config_site.h
 $ cd pjlib/include/pj/
 $ vi config_site.h
@@ -93,6 +97,22 @@ $ make dep && make clean && make
 
 
 
+build for android
+-------------------
+#define PJ_CONFIG_ANDROID 1
+#include <pj/config_site_sample.h>
+
+APP_PLATFORM=android-19 TARGET_ABI=armeabi ./configure-android --use-ndk-cflags
+APP_PLATFORM=android-19 TARGET_ABI=armeabi-v7a ./configure-android --use-ndk-cflags
+
+
+
+
+
+
+other
+======
+>>>>>>> android-dev-test
 发送stun包的地方 sess_on_send_msg  （stun_sock.c）
 
 
