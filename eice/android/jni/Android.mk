@@ -32,6 +32,14 @@ LOCAL_LDLIBS    := $(APP_LDLIBS)
 
 
 
+# $(warning $(LOCAL_PATH))
+$(info LIB_TYPE=$(LIB_TYPE))
 
-
+ifeq ($(LIB_TYPE),static) 
+LOCAL_CFLAGS += -DEICE_STATIC
+include $(BUILD_STATIC_LIBRARY)
+else 
 include $(BUILD_SHARED_LIBRARY)
+endif 
+
+

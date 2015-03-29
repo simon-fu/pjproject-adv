@@ -262,21 +262,19 @@ static JNINativeMethod gNativeMethods[] =
 //static int gNativeMethodsNum = NELEM(gNativeMethods);
 static int gNativeMethodsNum = sizeof(gNativeMethods) / sizeof(gNativeMethods[0]);
 
-
-MY_ANDROID_JNI_ONLOAD_API jint JNI_OnLoad(JavaVM * vm, void *reserved)
-{
+int register_eice_jni(JavaVM * vm){
     JNIEnv *env = NULL;
     jint result = 0;
     
-    (void) reserved;
+    
     
     PRNRAW("\n\n\n\n\n\n\n");
-    PRNRAW("JNI_OnLoad() +++++++++++++++++++  \n\n");
+    PRNRAW("register_eice_jni() +++++++++++++++++++  \n\n");
     
     //ptrace(PTRACE_TRACEME,0 ,0 ,0);
     
-//    plw_init();
-//    plw_set_print_func(PrintLogMsg);
+    //    plw_init();
+    //    plw_set_print_func(PrintLogMsg);
     
     do
     {
@@ -302,7 +300,7 @@ MY_ANDROID_JNI_ONLOAD_API jint JNI_OnLoad(JavaVM * vm, void *reserved)
         
         PRNRAW("register native ...\n");
         
-//        result = android::AndroidRuntime::registerNativeMethods(env, JNI_CLASS_NAME, gNativeMethods, gNativeMethodsNum);
+        //        result = android::AndroidRuntime::registerNativeMethods(env, JNI_CLASS_NAME, gNativeMethods, gNativeMethodsNum);
         
         jclass clazz;
         
@@ -330,3 +328,12 @@ MY_ANDROID_JNI_ONLOAD_API jint JNI_OnLoad(JavaVM * vm, void *reserved)
     
     return result;
 }
+
+#ifndef EICE_STATIC
+MY_ANDROID_JNI_ONLOAD_API jint JNI_OnLoad(JavaVM * vm, void *reserved)
+{
+    (void) reserved;
+    return register_eice_jni(vm);
+}
+#endif
+
