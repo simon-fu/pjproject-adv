@@ -112,7 +112,6 @@ make dep && make clean && make
 
 other
 ======
->>>>>>> android-dev-test
 发送stun包的地方 sess_on_send_msg  （stun_sock.c）
 
 
