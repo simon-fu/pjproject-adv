@@ -42,30 +42,71 @@ public class MainActivity extends ActionBarActivity {
 	
 	protected void runDemo(){
 		
-		String config = "{\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,\"compCount\":2}";
+		final String config = "{\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,\"compCount\":2}";
 		
-		final EIce caller = EIce.newCaller(config);
-		final String callerContent = caller.getLocalContent();
-		Log.i(TAG, "callerContent=" + callerContent);
+		final String[] callerContents = new String[]{null};
+		final String[] calleeContents = new String[]{null};
 		
-		final EIce callee = EIce.newCallee(config, callerContent);
-		final String calleeContent = callee.getLocalContent();
-		Log.i(TAG, "calleeContent=" + calleeContent);
-		
-		
-		new Thread(new Runnable(){
+		Thread thread = new Thread(new Runnable(){
 
 			@Override
 			public void run() {
-				caller.callerNego(calleeContent, new EIceListener() {
+				final EIce caller = EIce.newCaller(config);
+				final String callerContent = caller.getLocalContent();
+				Log.i(TAG, "callerContent=" + callerContent);
+				synchronized (callerContents) {
+					callerContents[0] = callerContent;
+					callerContents.notifyAll();
+				}
+				
+				// wait for callee content
+				synchronized (calleeContents) {
+					if(calleeContents[0] == null){
+						try {
+							calleeContents.wait();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					}
+				}
+				
+				caller.callerNego(calleeContents[0], new EIceListener() {
 					@Override
 					public void onNegoResult(String negoResult) {
 						Log.i(TAG, "caller nego result = " + negoResult);
 					}
 				});
+				
+				try {
+					caller.waitforNegoResult();
+				} catch (InterruptedException e1) {
+					e1.printStackTrace();
+				}
+				
+				caller.freeCall();
 			}
 			
-		}).start();
+		});
+		thread.start();
+		
+		// wait for caller content
+		synchronized (callerContents) {
+			if(callerContents[0] == null){
+				try {
+					callerContents.wait();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		final EIce callee = EIce.newCallee(config, callerContents[0]);
+		final String calleeContent = callee.getLocalContent();
+		Log.i(TAG, "calleeContent=" + calleeContent);
+		synchronized (calleeContents) {
+			calleeContents[0] = calleeContent;
+			calleeContents.notifyAll();
+		}
 		
 		callee.calleeNego(new EIceListener() {
 			@Override
@@ -74,20 +115,21 @@ public class MainActivity extends ActionBarActivity {
 			}
 		});
 		
-		try {
-			caller.waitforNegoResult();
-		} catch (InterruptedException e1) {
-			e1.printStackTrace();
-		}
+		
 		
 		try {
 			callee.waitforNegoResult();
 		} catch (InterruptedException e1) {
 			e1.printStackTrace();
 		}
-		
-		caller.freeCall();
 		callee.freeCall();
 		
+		
+		
+		try {
+			thread.join();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 	}
 }

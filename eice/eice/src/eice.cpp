@@ -884,10 +884,10 @@ int eice_get_nego_result(eice_t obj, char * nego_result, int * p_nego_result_len
 
 	Json::FastWriter writer;
 	std::string str = writer.write(root_val);
-	dbgi("nego result =  %s\n", root_val.toStyledString().c_str());
+	dbgi("nego result = %s @@@\n", root_val.toStyledString().c_str());
 
 	strcpy(nego_result, str.c_str());
-	*p_nego_result_len = str.size();
+	*p_nego_result_len = (int)str.size();
 
 	return 0;
 }
@@ -989,12 +989,12 @@ int eice_test(){
 
     eice_init();
     
-    char caller_content[512];
+    char * caller_content = new char[8*1024];
     int caller_content_len = 0;
     eice_t caller = 0;
     ret = eice_new_caller(config_json, caller_content, &caller_content_len, &caller);
 
-    char callee_content[512];
+    char * callee_content = new char[8*1024];
 	int callee_content_len = 0;
 	eice_t callee = 0;
     ret = eice_new_callee(config_json, caller_content, caller_content_len, callee_content, &callee_content_len, &callee);
@@ -1019,6 +1019,9 @@ int eice_test(){
     eice_free(callee);
     
     eice_exit();
+    
+    delete []caller_content;
+    delete []callee_content;
     
     return ret;
 }
