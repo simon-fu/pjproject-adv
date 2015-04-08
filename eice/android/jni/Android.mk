@@ -31,9 +31,14 @@ LOCAL_LDFLAGS   := $(APP_LDFLAGS)
 LOCAL_LDLIBS    := $(APP_LDLIBS)
 
 
-
+$(info ==========================)
 # $(warning $(LOCAL_PATH))
 $(info LIB_TYPE=$(LIB_TYPE))
+$(info LOCAL_CFLAGS=$(LOCAL_CFLAGS))
+$(info LOCAL_LDFLAGS=$(LOCAL_LDFLAGS))
+$(info LOCAL_LDLIBS=$(LOCAL_LDLIBS))
+$(info ==========================)
+
 
 ifeq ($(LIB_TYPE),static) 
 LOCAL_CFLAGS += -DEICE_STATIC

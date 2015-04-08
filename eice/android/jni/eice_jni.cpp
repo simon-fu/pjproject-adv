@@ -262,6 +262,7 @@ static JNINativeMethod gNativeMethods[] =
 //static int gNativeMethodsNum = NELEM(gNativeMethods);
 static int gNativeMethodsNum = sizeof(gNativeMethods) / sizeof(gNativeMethods[0]);
 
+extern "C" int register_eice_jni(JavaVM * vm);
 int register_eice_jni(JavaVM * vm){
     JNIEnv *env = NULL;
     jint result = 0;
