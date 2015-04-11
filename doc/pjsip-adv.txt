@@ -120,4 +120,191 @@ other
 - (NSXMLElement *)toElement;
 
 
+pjproject-2.3源码分析
+====================
+问题：
+什么是 regular nomination 和 aggressive nomination  ？
+答：regular nomination 指的是发送stun包时不带上 USE-CANDIDATE 标志，当所有的candidate都check过后，nominate 时才带上 USE-CANDIDATE 标志；
+aggressive nomination 在controlling role的每个stun包都带上 USE-CANDIDATE 标志，
+
+
+comp 与 socket 的关系？
+一个comp创建一个socket, 即pj_stun_sock（ pj_stun_sock_create ）
+
+
+如何收发 获取外网地址包 和 ice打洞包 ？
+发送获取外网地址的地方： stun_sock.c, sess_on_send_msg 函数里， 用 pj_activesock_sendto 
+发送ice打洞包的地方：ice_strans.c, ice_tx_pkt函数里, 用 pj_stun_sock_sendto 
+实际上，收发数据都是通过 pj_stun_sock 进行的；
+接收数据的时候 pj_stun_sock 的 on_data_recvfrom 会 根据 transaction id 区分 自身的bind response 还是 上层 （ice） 的数据包；
+
+如何区分ice回应数据属于哪个check pair ？ 
+根据接收到的 transaction id 确定tsx ： pj_stun_session_on_rx_pkt -> on_incoming_response -> tsx_lookup  ( stun_session.c ) 
+把tsx回调给上层： -> pj_stun_client_tsx_on_rx_msg -> stun_tsx_on_complete ( stun_session.c ) -> on_stun_request_complete ( ice_session.c )
+on_stun_request_complete 里可以根据tsx的token 即可得到 check pair 。
+
+如何区分ice请求数据属于哪个check pair ？
+无法区分 check pair，但可以根据 stun session 得到 comp id；
+pj_stun_session_on_rx_pkt -> on_incoming_request -> cb.on_rx_request （ stun_session.c )
+-> on_stun_rx_request ( ice_session.c )
+
+
+模块栈
+	ice_strans.c 
+	stun_sock.c    ice_session.c
+ 	stun_session.c 
+ 	stun_transaction.c 
+ 	activesock.c
+
+获取外网地址流程： 
+	ice_strans.c 
+	stun_sock.c    
+ 	stun_session.c 
+ 	stun_transaction.c 
+ 	activesock.c
+
+	发送请求：-----> pj_ice_strans_create -> create_comp  （ ice_strans.c )
+				 -> pj_stun_sock_create & pj_stun_sock_start -> get_mapped_addr ( stun_sock.c )
+				 -> pj_stun_session_create_req -> pj_stun_session_send_msg  ( stun_session.c )
+				 -> pj_stun_client_tsx_send_msg -> tsx_transmit_msg -> cb.on_send_msg ( stun_transaction.c )
+				 -> stun_tsx_on_send_msg -> cb.on_send_msg ( stun_session.c ) 
+				 -> sess_on_send_msg  ( stun_sock.c )
+				 -> pj_activesock_sendto (activesock.c) 
+	接收回应：-----> on_data_recvfrom （ stun_sock.c ) 
+				 -> pj_stun_session_on_rx_pkt -> on_incoming_response ( stun_session.c )
+				 -> pj_stun_client_tsx_on_rx_msg -> cb.on_complete  ( stun_transaction.c )
+				 -> stun_tsx_on_complete -> cb.on_request_complete ( stun_session.c )
+				 -> sess_on_request_complete -> cb.on_status ( stun_sock.c )
+                 -> stun_on_status -> sess_init_update -> cb.on_ice_complete （ ice_strans.c )
+
+
+
+ice 协商启动：
+主叫初始化
+  pj_ice_strans_create -> wait on_ice_complete with PJ_ICE_STRANS_OP_INIT (等待获取本地和外网地址完成)
+  pj_ice_strans_init_ice 
+  pj_ice_strans_get_ufrag_pwd pj_ice_strans_enum_cands 
+把主叫的 ufrag、pwd、candidates 发送给被叫
+被叫执行相同的初始化
+被叫启动协商   pj_ice_strans_start_ice （参数包括对方的ufrag、pwd、candidates）
+把被叫的 ufrag、pwd、candidates 发送回给主叫
+主叫启动协商
+
+ice 协商过程：
+  发送请求 ----> pj_ice_strans_start_ice （参数包括对方的ufrag、pwd、candidates）
+                pj_ice_sess_create_check_list -> pj_ice_sess_start_check -> periodic_timer -> start_periodic_check 
+     				perform_check （创建 stun req 并发送出去） ( ice_session.c )
+                pj_stun_session_send_msg ( stun_session.c )
+  接收回应 ----> on_data_recvfrom -> cb.on_rx_data（ stun_sock.c ) 
+             -> stun_on_rx_data （ ice_strans.c )
+             -> pj_ice_sess_on_rx_pkt ( ice_session.c )
+             -> pj_stun_session_on_rx_pkt ( stun_session.c )
+             -> pj_stun_session_on_rx_pkt -> on_incoming_response ( stun_session.c )
+			 -> pj_stun_client_tsx_on_rx_msg -> cb.on_complete  ( stun_transaction.c )
+			 -> stun_tsx_on_complete -> cb.on_request_complete ( stun_session.c )
+             -> on_stun_request_complete ( ice_session.c )
+  接收请求 ----> on_data_recvfrom -> cb.on_rx_data（ stun_sock.c ) 
+             -> stun_on_rx_data （ ice_strans.c )
+             -> pj_stun_session_on_rx_pkt -> on_incoming_request -> cb.on_rx_request （ stun_session.c )
+             -> on_stun_rx_request ( ice_session.c ) 
+  nominating -> 主叫ice_session.c 的 on_check_complete 里，当所有check结束，且每个comp的 valid_check !=NULL  
+  			 -> start_nominated_check ( ice->is_nominating ＝ true， 把check的状态都设置成 PJ_ICE_SESS_CHECK_STATE_WAITING )
+  			 -> periodic_timer -> start_periodic_check -> perform_check ( 与“发送请求类似”，不同的是为请求包加上PJ_STUN_ATTR_USE_CANDIDATE标志 )
+
+ice 协商结束：
+  协商结束逻辑都在 ice_session.c 的 on_check_complete 里。
+  协商成功 ----> 同“ice 协商过程" -> "接收回应”
+  			 -> on_stun_request_complete -> on_check_complete ( 遍历确认所有comp都已nominated （nominated_check 不为NULL）) （ ice_session.c ）
+             -> on_ice_complete -> on_timer (with TIMER_COMPLETION_CALLBACK) -> cb.on_ice_complete（ ice_session.c ）
+             -> on_ice_complete -> cb.on_ice_complete ( ice_strans.c )
+  协商失败    -> on_check_complete ( 所有check的state都 >= PJ_ICE_SESS_CHECK_STATE_SUCCEEDED )
+  		        被叫有 valid_check ==NULL:  on_ice_complete(with PJNATH_EICEFAILED)
+  		        被叫所有 valid_check !=NULL: -> on_timer (with TIMER_CONTROLLED_WAIT_NOM) -> on_ice_complete (with PJNATH_EICENOMTIMEOUT)  
+  		        主叫 is_nominating ==true，on_ice_complete(with PJNATH_EICEFAILED)
+  		        主叫有 valid_check ==NULL:  on_ice_complete(with PJNATH_EICEFAILED)
+   
+
+ice_session 详解
+  timer
+	ice->timer : on_timer, 多用途timer
+	    TIMER_CONTROLLED_WAIT_NOM
+	    TIMER_COMPLETION_CALLBACK
+	    TIMER_START_NOMINATED_CHECK
+	    TIMER_KEEP_ALIVE
+	ice->clist.timer : periodic_timer, 由 pj_ice_sess_start_check 和 start_nominated_check 启动
+
+
+
+ice_session ( pj_ice_sess )
+    创建对象  pj_ice_sess_create
+    发送数据  pj_ice_sess_send_data 协商成功后，可以用此函数发送给对方，一般用不到
+    接收数据  pj_ice_sess_on_rx_pkt 上层收到数据后调用
+    pj_ice_sess_add_cand
+	pj_ice_sess_create_check_list
+    回调函数  pj_ice_sess_cb
+               on_ice_complete 协商完成，成功或失败
+               on_tx_pkt  真正发送数据
+               on_rx_data 收到不是ice协商的包时，传给上层
+
+
+stun_sock （ pj_stun_sock ）
+  先解析域名，然后发送stun bind请求，收到bind回应后，启动keep-alive；
+  创建一个 pj_activesock_t 用于发送和接收数据；
+  创建一个 pj_stun_session 用于创建stun bind请求和处理回应（pj_stun_session_create_req -> pj_stun_session_send_msg）；
+
+    创建对象  pj_stun_sock_create
+    启动绑定  pj_stun_sock_start （启动stun bind请求）
+    获取信息  pj_stun_sock_get_info （本地地址，公网地址，relay地址）
+    发送数据  pj_stun_sock_sendto （发送成功后回调 on_data_sent())
+    回调函数  pj_stun_sock_cb
+               on_rx_data (收到数据)
+               on_data_sent （数据已发送成功，由pj_stun_sock_sendto启动发送）
+               on_status（状态更新，bind请求成功、公网地址有变化、其他粗错误（bind超时、DNS解析失败、keep-alive失败等））
+
+stun_session （ pj_stun_session ）
+  可以创建stun的请求、回应和indication包；
+  创建一个 pj_stun_client_tsx 用于处理bind 发送请求和解析回应；
+  每个tsx对应一个pj_stun_tx_data数据，发送的数据放在sess->pending_request_list 里，当删除tsx的时候（stun_tsx_on_destroy）删除data
+
+    创建对象  pj_stun_session_create
+    创建请求  pj_stun_session_create_req
+    创建回应  pj_stun_session_create_res
+    发送数据  pj_stun_session_send_msg
+    接收数据  pj_stun_session_on_rx_pkt （上层收到数据包后调用）
+    回调函数  pj_stun_session_cb
+               on_send_msg （真正发送数据）
+               on_rx_request （收到stun请求）
+               on_request_complete （请求完成，收到回应或请求超时后调用）
+               on_rx_indication （收到indication）
+
+stun_transaction (pj_stun_client_tsx)
+  发送stun请求和接收stun回应；会自动重发stun请求包, 重发间隔由rto确定，rto在创建对象指定的pj_stun_config里（cfg->rto_msec）；
+  rto初始为PJ_STUN_RTO_VALUE（100）毫秒，每次重发间隔都乘以2，重发7次，最后一次timeout为16*rto;
+  即每次间隔为 100，200，400，800，1600，3200，1600；
+    创建对象  pj_stun_client_tsx_create
+    启动发送  pj_stun_client_tsx_send_msg 
+    接收数据  pj_stun_client_tsx_on_rx_msg (使用者收到stun回应数据包后调用此函数)
+    回调函数  pj_stun_tsx_cb
+               on_complete （请求完成，收到回应或请求超时后调用）
+               on_send_msg （真正发送数据）
+               on_destroy （调用pj_stun_client_tsx_schedule_destroy后，若干时间后回调）
+
+pj_activesock_t
+    创建对象  pj_activesock_create  
+             pj_activesock_create_udp 
+    启动接收  pj_activesock_start_read 
+             pj_activesock_start_read2
+             pj_activesock_start_recvfrom
+             pj_activesock_start_recvfrom2
+    启动发送  pj_activesock_send
+             pj_activesock_sendto
+    启动监听  pj_activesock_start_accept
+    启动连接  pj_activesock_start_connect
+    回调函数  pj_activesock_cb
+               on_data_read （收到数据，由pj_activesock_start_read启动接收）
+               on_data_recvfrom （收到数据，由 pj_activesock_start_recvfrom启动接收）
+               on_data_sent ( 数据已发送 )
+               on_accept_complete （ 接受连接， 由 pj_activesock_start_accept启动监听 ）
+               on_accept_complete2 （比 on_accept_complete 多了个 status ）
+               on_connect_complete （ 连接到服务器的结果 ）
 

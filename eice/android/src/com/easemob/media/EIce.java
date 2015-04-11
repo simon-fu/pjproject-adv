@@ -20,6 +20,8 @@ public class EIce {
 //	protected static EIce sInst = new EIce();
 	static {
 		System.loadLibrary("eice");
+//		System.loadLibrary("eice_other");
+//		System.loadLibrary("easemob_jni");
 		nativeInitEIce();
 	}
 	

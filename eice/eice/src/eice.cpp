@@ -300,11 +300,12 @@ static int query_wait(pj_lock_t * lock, int * pflag, int * pcancel, unsigned int
 	pj_get_timestamp(&ts_start);
 	ts = ts_start;
 	while (!(*pflag) && !(*pcancel)) {
-		pj_lock_release(lock);
 //		unsigned int elapse = (unsigned ) (ts.u64 - ts_start.u64);
 		pj_uint32_t elapse = pj_elapsed_msec(&ts_start, &ts);
-		dbgi("elapsed=%d", elapse);
+		dbgi("elapsed=%d msec", elapse);
 		if(elapse >= timeout_ms) break;
+        pj_lock_release(lock);
+        
 		pj_thread_sleep(50);
 		pj_get_timestamp(&ts);
 		pj_lock_acquire(lock);
@@ -468,7 +469,7 @@ int eice_new(const char* config, pj_ice_sess_role role, eice_t * pobj) {
 			break;
 		}
 
-		ret = query_wait(obj->lock, &obj->ice_init_done, NULL, 3000);
+		ret = query_wait(obj->lock, &obj->ice_init_done, NULL, 30*1000);
 		if (ret != 0) {
 			dbge("wait ice init timeout!!!");
 			break;
@@ -984,7 +985,8 @@ void eice_set_log_func(eice_log_func * log_func){
 
 
 int eice_test(){
-    const char * config_json = "{\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,\"compCount\":2}";
+//    const char * config_json = "{\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,\"compCount\":2}";
+    const char * config_json = "{\"turnHost\":\"203.195.185.36\",\"turnPort\":3488,\"compCount\":2}";
     int ret = 0;
 
     eice_init();

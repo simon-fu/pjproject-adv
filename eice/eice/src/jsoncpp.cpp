@@ -2978,8 +2978,10 @@ Value& Path::make(Value& root) const {
 
 
 #if defined(__ANDROID__)
+#ifndef isfinite
 #include <cmath>
 #define isfinite std::isfinite
+#endif
 #endif
 
 
