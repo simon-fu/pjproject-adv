@@ -29,6 +29,11 @@
 #include <pj/rand.h>
 #include <pj/string.h>
 
+#define dbgi(...) PJ_LOG(3, (__FILE__, __VA_ARGS__))
+#define dbgw(...) PJ_LOG(2, (__FILE__, __VA_ARGS__))
+#define dbge(...) PJ_LOG(1, (__FILE__, __VA_ARGS__))
+
+
 /* String names for candidate types */
 static const char *cand_type_names[] =
 {
@@ -2977,6 +2982,11 @@ PJ_DEF(pj_status_t) pj_ice_sess_on_rx_pkt(pj_ice_sess *ice,
     if (comp == NULL) {
 	pj_grp_lock_release(ice->grp_lock);
 	return PJNATH_EICEINCOMPID;
+    }
+
+    // simon
+    for (i=0; i<PJ_ARRAY_SIZE(ice->tp_data); ++i) {
+        	dbgi("===== tp_data[%d].transport_id=%d", i, ice->tp_data[i].transport_id);
     }
 
     /* Find transport */

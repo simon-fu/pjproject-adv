@@ -134,7 +134,7 @@ comp 与 socket 的关系？
 
 如何收发 获取外网地址包 和 ice打洞包 ？
 发送获取外网地址的地方： stun_sock.c, sess_on_send_msg 函数里， 用 pj_activesock_sendto 
-发送ice打洞包的地方：ice_strans.c, ice_tx_pkt函数里, 用 pj_stun_sock_sendto 
+发送ice打洞包的地方：ice_strans.c, ice_tx_pkt 函数里, 用 pj_stun_sock_sendto 
 实际上，收发数据都是通过 pj_stun_sock 进行的；
 接收数据的时候 pj_stun_sock 的 on_data_recvfrom 会 根据 transaction id 区分 自身的bind response 还是 上层 （ice） 的数据包；
 
@@ -157,11 +157,6 @@ pj_stun_session_on_rx_pkt -> on_incoming_request -> cb.on_rx_request （ stun_se
  	activesock.c
 
 获取外网地址流程： 
-	ice_strans.c 
-	stun_sock.c    
- 	stun_session.c 
- 	stun_transaction.c 
- 	activesock.c
 
 	发送请求：-----> pj_ice_strans_create -> create_comp  （ ice_strans.c )
 				 -> pj_stun_sock_create & pj_stun_sock_start -> get_mapped_addr ( stun_sock.c )
@@ -198,18 +193,18 @@ ice 协商过程：
   接收回应 ----> on_data_recvfrom -> cb.on_rx_data（ stun_sock.c ) 
              -> stun_on_rx_data （ ice_strans.c )
              -> pj_ice_sess_on_rx_pkt ( ice_session.c )
-             -> pj_stun_session_on_rx_pkt ( stun_session.c )
              -> pj_stun_session_on_rx_pkt -> on_incoming_response ( stun_session.c )
 			 -> pj_stun_client_tsx_on_rx_msg -> cb.on_complete  ( stun_transaction.c )
 			 -> stun_tsx_on_complete -> cb.on_request_complete ( stun_session.c )
              -> on_stun_request_complete ( ice_session.c )
   接收请求 ----> on_data_recvfrom -> cb.on_rx_data（ stun_sock.c ) 
              -> stun_on_rx_data （ ice_strans.c )
+             -> pj_ice_sess_on_rx_pkt ( ice_session.c )
              -> pj_stun_session_on_rx_pkt -> on_incoming_request -> cb.on_rx_request （ stun_session.c )
              -> on_stun_rx_request ( ice_session.c ) 
   nominating -> 主叫ice_session.c 的 on_check_complete 里，当所有check结束，且每个comp的 valid_check !=NULL  
   			 -> start_nominated_check ( ice->is_nominating ＝ true， 把check的状态都设置成 PJ_ICE_SESS_CHECK_STATE_WAITING )
-  			 -> periodic_timer -> start_periodic_check -> perform_check ( 与“发送请求类似”，不同的是为请求包加上PJ_STUN_ATTR_USE_CANDIDATE标志 )
+  			 -> periodic_timer -> start_periodic_check -> perform_check ( 与“发送请求类似”，不同的是为请求包加上 PJ_STUN_ATTR_USE_CANDIDATE 标志 )
 
 ice 协商结束：
   协商结束逻辑都在 ice_session.c 的 on_check_complete 里。

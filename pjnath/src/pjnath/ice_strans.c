@@ -31,6 +31,11 @@
 #include <pj/string.h>
 #include <pj/compat/socket.h>
 
+#define dbgi(...) PJ_LOG(3, (__FILE__, __VA_ARGS__))
+#define dbgw(...) PJ_LOG(2, (__FILE__, __VA_ARGS__))
+#define dbge(...) PJ_LOG(1, (__FILE__, __VA_ARGS__))
+
+
 #define ENABLE_TRACE 0
 
 #if defined(ENABLE_TRACE) && (ENABLE_TRACE != 0)
@@ -878,6 +883,7 @@ PJ_DEF(pj_status_t) pj_ice_strans_init_ice(pj_ice_strans *ice_st,
 	    comp->turn_log_off = PJ_FALSE;
 	}
 
+
 	for (j=0; j<comp->cand_cnt; ++j) {
 	    pj_ice_sess_cand *cand = &comp->cand_list[j];
 	    unsigned ice_cand_id;
@@ -892,6 +898,17 @@ PJ_DEF(pj_status_t) pj_ice_strans_init_ice(pj_ice_strans *ice_st,
 
 	    /* Must have address */
 	    pj_assert(pj_sockaddr_has_addr(&cand->addr));
+
+	    /* Simon */
+//	    char addr_buf[64];
+//	    dbgi("add local cand: comp=%d, transport_id=%d, type=%s, local_pref=%d, foundation=%s, addr=%s",
+//	    		comp->comp_id,
+//				cand->transport_id,
+//	    		pj_ice_get_cand_type_name(cand->type),
+//				cand->local_pref,
+//				cand->foundation.ptr,
+//				pj_sockaddr_print(&cand->addr, addr_buf, sizeof(addr_buf), 0x01)
+//				);
 
 	    /* Add the candidate */
 	    status = pj_ice_sess_add_cand(ice_st->ice, comp->comp_id,

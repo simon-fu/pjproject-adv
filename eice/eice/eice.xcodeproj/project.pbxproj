@@ -23,10 +23,10 @@
 /* Begin PBXBuildFile section */
 		F4CE62091AC2EE7000ED62D7 /* eice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F4CE62061AC2EE7000ED62D7 /* eice.cpp */; };
 		F4CE620A1AC2EE7000ED62D7 /* jsoncpp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F4CE62081AC2EE7000ED62D7 /* jsoncpp.cpp */; };
-		F4CE620E1AC2EFB200ED62D7 /* libpj-arm-apple-darwin9.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F4CE620B1AC2EFB200ED62D7 /* libpj-arm-apple-darwin9.a */; };
-		F4CE620F1AC2EFB200ED62D7 /* libpjlib-util-arm-apple-darwin9.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F4CE620C1AC2EFB200ED62D7 /* libpjlib-util-arm-apple-darwin9.a */; };
-		F4CE62101AC2EFB200ED62D7 /* libpjnath-arm-apple-darwin9.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F4CE620D1AC2EFB200ED62D7 /* libpjnath-arm-apple-darwin9.a */; };
 		F4CE62171AC2F49D00ED62D7 /* eice.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = F4CE62071AC2EE7000ED62D7 /* eice.h */; };
+		F4E601CC1ADBB3510039C780 /* libpj-arm-apple-darwin9.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F4E601C91ADBB3510039C780 /* libpj-arm-apple-darwin9.a */; };
+		F4E601CD1ADBB3510039C780 /* libpjlib-util-arm-apple-darwin9.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F4E601CA1ADBB3510039C780 /* libpjlib-util-arm-apple-darwin9.a */; };
+		F4E601CE1ADBB3510039C780 /* libpjnath-arm-apple-darwin9.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F4E601CB1ADBB3510039C780 /* libpjnath-arm-apple-darwin9.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -47,9 +47,9 @@
 		F4CE62061AC2EE7000ED62D7 /* eice.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = eice.cpp; path = src/eice.cpp; sourceTree = SOURCE_ROOT; };
 		F4CE62071AC2EE7000ED62D7 /* eice.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = eice.h; path = src/eice.h; sourceTree = SOURCE_ROOT; };
 		F4CE62081AC2EE7000ED62D7 /* jsoncpp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = jsoncpp.cpp; path = src/jsoncpp.cpp; sourceTree = SOURCE_ROOT; };
-		F4CE620B1AC2EFB200ED62D7 /* libpj-arm-apple-darwin9.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libpj-arm-apple-darwin9.a"; path = "pjlib/lib/libpj-arm-apple-darwin9.a"; sourceTree = "<group>"; };
-		F4CE620C1AC2EFB200ED62D7 /* libpjlib-util-arm-apple-darwin9.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libpjlib-util-arm-apple-darwin9.a"; path = "pjlib/lib/libpjlib-util-arm-apple-darwin9.a"; sourceTree = "<group>"; };
-		F4CE620D1AC2EFB200ED62D7 /* libpjnath-arm-apple-darwin9.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libpjnath-arm-apple-darwin9.a"; path = "pjlib/lib/libpjnath-arm-apple-darwin9.a"; sourceTree = "<group>"; };
+		F4E601C91ADBB3510039C780 /* libpj-arm-apple-darwin9.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libpj-arm-apple-darwin9.a"; path = "pjlib/lib/libpj-arm-apple-darwin9.a"; sourceTree = "<group>"; };
+		F4E601CA1ADBB3510039C780 /* libpjlib-util-arm-apple-darwin9.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libpjlib-util-arm-apple-darwin9.a"; path = "pjlib/lib/libpjlib-util-arm-apple-darwin9.a"; sourceTree = "<group>"; };
+		F4E601CB1ADBB3510039C780 /* libpjnath-arm-apple-darwin9.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libpjnath-arm-apple-darwin9.a"; path = "pjlib/lib/libpjnath-arm-apple-darwin9.a"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,9 +57,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F4CE620E1AC2EFB200ED62D7 /* libpj-arm-apple-darwin9.a in Frameworks */,
-				F4CE620F1AC2EFB200ED62D7 /* libpjlib-util-arm-apple-darwin9.a in Frameworks */,
-				F4CE62101AC2EFB200ED62D7 /* libpjnath-arm-apple-darwin9.a in Frameworks */,
+				F4E601CC1ADBB3510039C780 /* libpj-arm-apple-darwin9.a in Frameworks */,
+				F4E601CD1ADBB3510039C780 /* libpjlib-util-arm-apple-darwin9.a in Frameworks */,
+				F4E601CE1ADBB3510039C780 /* libpjnath-arm-apple-darwin9.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -69,9 +69,9 @@
 		F4CE61E31AC2EC7300ED62D7 = {
 			isa = PBXGroup;
 			children = (
-				F4CE620B1AC2EFB200ED62D7 /* libpj-arm-apple-darwin9.a */,
-				F4CE620C1AC2EFB200ED62D7 /* libpjlib-util-arm-apple-darwin9.a */,
-				F4CE620D1AC2EFB200ED62D7 /* libpjnath-arm-apple-darwin9.a */,
+				F4E601C91ADBB3510039C780 /* libpj-arm-apple-darwin9.a */,
+				F4E601CA1ADBB3510039C780 /* libpjlib-util-arm-apple-darwin9.a */,
+				F4E601CB1ADBB3510039C780 /* libpjnath-arm-apple-darwin9.a */,
 				F4CE61EE1AC2EC7300ED62D7 /* eice */,
 				F4CE61ED1AC2EC7300ED62D7 /* Products */,
 			);
@@ -286,6 +286,12 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/pjlib/lib",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/ios-mixed-debug",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/armv7/pjlib",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/armv7/pjlib-util",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/armv7/pjnath",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/mixed",
 				);
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -309,6 +315,12 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/pjlib/lib",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/ios-mixed-debug",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/armv7/pjlib",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/armv7/pjlib-util",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/armv7/pjnath",
+					"/Users/simon/Desktop/simon/projects/easemob/src/p2p/pjproject-adv/lib/mixed",
 				);
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -394,7 +394,7 @@ int eice_new(const char* config, pj_ice_sess_role role, eice_t * pobj) {
 		obj->ice_cfg.stun_cfg.pf = &obj->cp.factory;
 
 		/* Create application memory pool */
-		obj->ice_pool = pj_pool_create(&obj->cp.factory, "ice_pool",
+		obj->ice_pool = pj_pool_create(&obj->cp.factory, "eice_pool",
 				512, 512, NULL);
 		obj->ice_pool_inited = 1;
 
@@ -985,8 +985,8 @@ void eice_set_log_func(eice_log_func * log_func){
 
 
 int eice_test(){
-//    const char * config_json = "{\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,\"compCount\":2}";
-    const char * config_json = "{\"turnHost\":\"203.195.185.36\",\"turnPort\":3488,\"compCount\":2}";
+    const char * config_json = "{\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,\"compCount\":2}";
+//    const char * config_json = "{\"turnHost\":\"203.195.185.36\",\"turnPort\":3488,\"compCount\":2}"; // error ip
     int ret = 0;
 
     eice_init();
@@ -1019,6 +1019,9 @@ int eice_test(){
 
     eice_free(caller);
     eice_free(callee);
+    
+    //ret = eice_new_caller(config_json, caller_content, &caller_content_len, &caller);
+    
     
     eice_exit();
     
