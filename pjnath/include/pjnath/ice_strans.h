@@ -849,6 +849,15 @@ PJ_DECL(pj_status_t) pj_ice_strans_sendto(pj_ice_strans *ice_st,
  * @}
  */
 
+PJ_DECL(pj_status_t) pj_ice_strans_create_ext(const char *name,
+					  const pj_ice_strans_cfg *cfg,
+					  unsigned comp_cnt,
+					  void *user_data,
+					  const pj_ice_strans_cb *cb,
+
+					  const stun_bind_cfg * bind_cfg,
+
+					  pj_ice_strans **p_ice_st);
 
 PJ_END_DECL
 

@@ -41,6 +41,19 @@
 
 enum { MAX_BIND_RETRY = 100 };
 
+
+/* Simon */
+typedef struct {
+//	pj_str_t stun_serv_ip;
+//	pj_uint16_t stun_serv_port;
+
+	pj_sockaddr stun_serv_addr;
+	pj_uint16_t stun_tsx_id[6];
+	pj_sockaddr stun_mapped_addr;
+	pj_status_t stun_result;
+}pj_stun_bind_session;
+
+
 struct pj_stun_sock
 {
     char		*obj_name;	/* Log identification	    */
@@ -54,8 +67,9 @@ struct pj_stun_sock
     int			 ka_interval;	/* Keep alive interval	    */
     pj_timer_entry	 ka_timer;	/* Keep alive timer.	    */
 
-    pj_sockaddr		 srv_addr;	/* Resolved server addr	    */
-    pj_sockaddr		 mapped_addr;	/* Our public address	    */
+// Simon
+//    pj_sockaddr		 srv_addr;	/* Resolved server addr	    */
+//    pj_sockaddr		 mapped_addr;	/* Our public address	    */
 
     pj_dns_srv_async_query *q;		/* Pending DNS query	    */
     pj_sock_t		 sock_fd;	/* Socket descriptor	    */
@@ -63,9 +77,31 @@ struct pj_stun_sock
     pj_ioqueue_op_key_t	 send_key;	/* Default send key for app */
     pj_ioqueue_op_key_t	 int_send_key;	/* Send key for internal    */
 
-    pj_uint16_t		 tsx_id[6];	/* .. to match STUN msg	    */
+//    pj_uint16_t		 tsx_id[6];	/* .. to match STUN msg	    */ // Simon
     pj_stun_session	*stun_sess;	/* STUN session		    */
     pj_grp_lock_t	*grp_lock;	/* Session group lock	    */
+
+
+    /* Simon */
+//    pj_str_t stun_ips[PJ_STUN_SOCK_MAX_STUN_NUM];
+//    pj_uint16_t stun_ports[PJ_STUN_SOCK_MAX_STUN_NUM];
+//    unsigned stun_serv_num;
+//    unsigned stun_bind_timeout;
+//    pj_sockaddr stun_addrs[PJ_STUN_SOCK_MAX_STUN_NUM];
+//    pj_uint16_t  stun_tsx_id[PJ_STUN_SOCK_MAX_STUN_NUM][6];
+//    pj_sockaddr	stun_mapped_addrs[PJ_STUN_SOCK_MAX_STUN_NUM];
+//    pj_status_t	stun_results[PJ_STUN_SOCK_MAX_STUN_NUM];
+//    pj_status_t stun_default_result;
+//    pj_bool_t stun_bind_complete; /* all bind complete */
+
+    pj_stun_bind_session bind_sessions[PJ_STUN_SOCK_MAX_STUN_NUM];
+    unsigned stun_serv_num;
+    unsigned stun_bind_timeout;
+    pj_bool_t stun_bind_complete; /* all bind complete */
+    pj_timer_entry	 stun_to_timer;	/* stun bind timeout timer.	    */
+    pj_bool_t	stun_to_canceling;
+    pj_stun_tx_data * stun_bind_tdatas[PJ_STUN_SOCK_MAX_STUN_NUM];
+
 };
 
 /* 
@@ -158,6 +194,63 @@ PJ_DEF(void) pj_stun_sock_cfg_default(pj_stun_sock_cfg *cfg)
 static pj_bool_t pj_stun_sock_cfg_is_valid(const pj_stun_sock_cfg *cfg)
 {
     return cfg->max_pkt_size > 1 && cfg->async_cnt >= 1;
+}
+
+// Simon
+static void init_bind_sess(pj_stun_bind_session * bs){
+	pj_bzero(bs, sizeof(*bs));
+	bs->stun_result = -1;
+}
+
+static void stun_to_timer_cb(pj_timer_heap_t *th, pj_timer_entry *te)
+{
+    pj_stun_sock *stun_sock;
+    pj_bool_t is_cancel = PJ_FALSE;
+
+    stun_sock = (pj_stun_sock *) te->user_data;
+
+    PJ_UNUSED_ARG(th);
+
+    PJ_LOG(4, (stun_sock->obj_name, "stun bind timeout callback"));
+
+    pj_grp_lock_acquire(stun_sock->grp_lock);
+
+    /* Time to stop Binding request */
+    if(!stun_sock->stun_bind_complete){
+//    	stun_sock->stun_to_canceling = PJ_TRUE;
+    	is_cancel = PJ_TRUE;
+    }
+    pj_grp_lock_release(stun_sock->grp_lock);
+
+    if(is_cancel){
+    	//sess_fail(stun_sock, PJ_STUN_SOCK_BINDING_OP, PJNATH_ESTUNTIMEDOUT);
+    	for(unsigned ui = 0; ui < stun_sock->stun_serv_num; ui++){
+    		pj_stun_session_cancel_req(stun_sock->stun_sess,
+    		    							stun_sock->stun_bind_tdatas[ui],
+    		    							PJ_TRUE,
+											PJNATH_ESTUNTIMEDOUT);
+    	}
+
+    }
+}
+
+static void start_stun_to_timer(pj_stun_sock *stun_sock)
+{
+    pj_timer_heap_cancel_if_active(stun_sock->stun_cfg.timer_heap,
+                                   &stun_sock->stun_to_timer, 0);
+
+    pj_assert(stun_sock->ka_interval != 0);
+    if (stun_sock->stun_bind_timeout > 0 && !stun_sock->is_destroying) {
+	pj_time_val delay;
+	unsigned msec = stun_sock->stun_bind_timeout;
+	delay.sec = msec/1000;
+	delay.msec = msec%1000;
+
+	pj_timer_heap_schedule_w_grp_lock(stun_sock->stun_cfg.timer_heap,
+	                                  &stun_sock->stun_to_timer,
+	                                  &delay, PJ_TRUE,
+	                                  stun_sock->grp_lock);
+    }
 }
 
 /*
@@ -369,10 +462,23 @@ PJ_DEF(pj_status_t) pj_stun_sock_create( pj_stun_config *stun_cfg,
      * STUN messages we sent with STUN messages that the application sends.
      * The last 16bit value in the array is a counter.
      */
-    for (i=0; i<PJ_ARRAY_SIZE(stun_sock->tsx_id); ++i) {
-	stun_sock->tsx_id[i] = (pj_uint16_t) pj_rand();
+//    for (i=0; i<PJ_ARRAY_SIZE(stun_sock->tsx_id); ++i) {
+//	stun_sock->tsx_id[i] = (pj_uint16_t) pj_rand();
+//    }
+//    stun_sock->tsx_id[5] = 0;
+
+
+    /* Simon */
+    for(unsigned ki = 0; ki < PJ_STUN_SOCK_MAX_STUN_NUM; ki++){
+    	pj_stun_bind_session * bs = &stun_sock->bind_sessions[ki];
+    	init_bind_sess(bs);
+    	for (i = 0; i < 6; ++i) {
+    		bs->stun_tsx_id[i] = (pj_uint16_t) pj_rand();
+    	}
+    	bs->stun_tsx_id[5] = 0;
     }
-    stun_sock->tsx_id[5] = 0;
+    stun_sock->stun_to_timer.cb = stun_to_timer_cb;
+    stun_sock->stun_to_timer.user_data = stun_sock;
 
 
     /* Init timer entry */
@@ -388,6 +494,7 @@ on_error:
     return status;
 }
 
+#if 0
 /* Start socket. */
 PJ_DEF(pj_status_t) pj_stun_sock_start( pj_stun_sock *stun_sock,
 				        const pj_str_t *domain,
@@ -399,6 +506,17 @@ PJ_DEF(pj_status_t) pj_stun_sock_start( pj_stun_sock *stun_sock,
     PJ_ASSERT_RETURN(stun_sock && domain && default_port, PJ_EINVAL);
 
     pj_grp_lock_acquire(stun_sock->grp_lock);
+
+	/* Simon */
+	stun_sock->stun_default_result = -1;
+	pj_bzero(&stun_sock->mapped_addr, sizeof(pj_sockaddr));
+	stun_sock->stun_bind_complete = PJ_FALSE;
+	for (unsigned ui = 0; ui < stun_sock->stun_serv_num; ui++) {
+		stun_sock->stun_results[ui] = -1;
+		pj_bzero(&stun_sock->stun_mapped_addrs[ui], sizeof(pj_sockaddr));
+	}
+
+
 
     /* Check whether the domain contains IP address */
     stun_sock->srv_addr.addr.sa_family = (pj_uint16_t)stun_sock->af;
@@ -452,6 +570,134 @@ PJ_DEF(pj_status_t) pj_stun_sock_start( pj_stun_sock *stun_sock,
     return status;
 }
 
+#else
+
+
+static void free_more_stun(pj_stun_sock *stun_sock)
+{
+	pj_grp_lock_acquire(stun_sock->grp_lock);
+	stun_sock->stun_serv_num = 0;
+	stun_sock->stun_bind_timeout = 0;
+	pj_grp_lock_release(stun_sock->grp_lock);
+}
+
+
+PJ_DECL(pj_status_t) pj_stun_sock_start_ext(pj_stun_sock *stun_sock,
+		const stun_bind_cfg * bind_cfg)
+{
+	pj_status_t status = PJ_SUCCESS;
+
+	PJ_ASSERT_RETURN(stun_sock, PJ_EINVAL);
+
+	pj_grp_lock_acquire(stun_sock->grp_lock);
+
+	/* Simon */
+//	stun_sock->stun_default_result = -1;
+//	pj_bzero(&stun_sock->mapped_addr, sizeof(pj_sockaddr));
+//	stun_sock->stun_bind_complete = PJ_FALSE;
+
+	for (unsigned ui = 0; ui < bind_cfg->stun_serv_num; ui++) {
+		pj_stun_bind_session * bs = &stun_sock->bind_sessions[ui];
+		bs->stun_result = -1;
+//		init_bind_sess(bs);
+
+//		pj_strdup(stun_sock->pool, &stun_sock->stun_ips[ui], &stun_ips[ui]);
+//		stun_sock->stun_ports[ui] = stun_ports[ui];
+
+		pj_sockaddr * saddr = &bs->stun_serv_addr;
+		saddr->addr.sa_family = (pj_uint16_t) stun_sock->af;
+		status = pj_inet_pton(stun_sock->af, &bind_cfg->stun_serv_ips[ui],
+				pj_sockaddr_get_addr(saddr));
+		if (status != PJ_SUCCESS) {
+			PJ_PERROR(2, (stun_sock->obj_name, status, "pj_inet_pton() error"));
+			free_more_stun(stun_sock);
+			return status;
+		}
+		pj_sockaddr_set_port(saddr, bind_cfg->stun_serv_ports[ui]);
+	}
+
+	stun_sock->stun_serv_num = bind_cfg->stun_serv_num;
+	stun_sock->stun_bind_timeout = bind_cfg->stun_bind_timeout;
+
+	status = get_mapped_addr(stun_sock);
+
+	pj_grp_lock_release(stun_sock->grp_lock);
+	return status;
+}
+
+PJ_DEF(pj_status_t) pj_stun_sock_start( pj_stun_sock *stun_sock,
+				        const pj_str_t *domain,
+				        pj_uint16_t default_port,
+				        pj_dns_resolver *resolver)
+{
+    pj_status_t status;
+
+    PJ_ASSERT_RETURN(stun_sock && domain && default_port, PJ_EINVAL);
+
+    pj_grp_lock_acquire(stun_sock->grp_lock);
+
+    pj_stun_bind_session * bs = &stun_sock->bind_sessions[0];
+    pj_sockaddr * saddr = &bs->stun_serv_addr;
+//    init_bind_sess(bs);
+    stun_sock->stun_serv_num = 1;
+    stun_sock->stun_bind_timeout = 0;
+
+
+    /* Check whether the domain contains IP address */
+    saddr->addr.sa_family = (pj_uint16_t)stun_sock->af;
+    status = pj_inet_pton(stun_sock->af, domain, pj_sockaddr_get_addr(saddr));
+    if (status != PJ_SUCCESS) {
+    	saddr->addr.sa_family = (pj_uint16_t)0;
+    }
+
+    /* If resolver is set, try to resolve with DNS SRV first. It
+     * will fallback to DNS A/AAAA when no SRV record is found.
+     */
+    if (status != PJ_SUCCESS && resolver) {
+		const pj_str_t res_name = pj_str("_stun._udp.");
+		unsigned opt;
+
+		pj_assert(stun_sock->q == NULL);
+
+		opt = PJ_DNS_SRV_FALLBACK_A;
+		if (stun_sock->af == pj_AF_INET6()) {
+			opt |= (PJ_DNS_SRV_RESOLVE_AAAA | PJ_DNS_SRV_FALLBACK_AAAA);
+		}
+
+		status = pj_dns_srv_resolve(domain, &res_name, default_port,
+						stun_sock->pool, resolver, opt,
+						stun_sock, &dns_srv_resolver_cb,
+						&stun_sock->q);
+
+		/* Processing will resume when the DNS SRV callback is called */
+
+	} else {
+
+		if (status != PJ_SUCCESS) {
+			pj_addrinfo ai;
+			unsigned cnt = 1;
+
+			status = pj_getaddrinfo(stun_sock->af, domain, &cnt, &ai);
+			if (status != PJ_SUCCESS)
+				return status;
+
+			pj_sockaddr_cp(saddr, &ai.ai_addr);
+		}
+
+		pj_sockaddr_set_port(saddr, (pj_uint16_t) default_port);
+
+		/* Start sending Binding request */
+		status = get_mapped_addr(stun_sock);
+	}
+
+    pj_grp_lock_release(stun_sock->grp_lock);
+    return status;
+}
+#endif
+
+
+
+
 /* Destructor */
 static void stun_sock_destructor(void *obj)
 {
@@ -495,6 +741,9 @@ PJ_DEF(pj_status_t) pj_stun_sock_destroy(pj_stun_sock *stun_sock)
     stun_sock->is_destroying = PJ_TRUE;
     pj_timer_heap_cancel_if_active(stun_sock->stun_cfg.timer_heap,
                                    &stun_sock->ka_timer, 0);
+    // Simon
+    pj_timer_heap_cancel_if_active(stun_sock->stun_cfg.timer_heap,
+                                       &stun_sock->stun_to_timer, 0);
 
     if (stun_sock->active_sock != NULL) {
 	stun_sock->sock_fd = PJ_INVALID_SOCKET;
@@ -578,9 +827,13 @@ static void dns_srv_resolver_cb(void *user_data,
     pj_assert(stun_sock->af == pj_AF_INET());
 
     /* Set the address */
-    pj_sockaddr_in_init(&stun_sock->srv_addr.ipv4, NULL,
+    // Simon
+//    pj_sockaddr * saddr = &stun_sock->srv_addr;
+    pj_sockaddr * saddr = &stun_sock->bind_sessions[0].stun_serv_addr;
+    pj_sockaddr_in_init(&saddr->ipv4, NULL,
 			rec->entry[0].port);
-    stun_sock->srv_addr.ipv4.sin_addr = rec->entry[0].server.addr[0];
+    saddr->ipv4.sin_addr = rec->entry[0].server.addr[0];
+
 
     /* Start sending Binding request */
     get_mapped_addr(stun_sock);
@@ -588,7 +841,7 @@ static void dns_srv_resolver_cb(void *user_data,
     pj_grp_lock_release(stun_sock->grp_lock);
 }
 
-
+#if 0
 /* Start sending STUN Binding request */
 static pj_status_t get_mapped_addr(pj_stun_sock *stun_sock)
 {
@@ -599,12 +852,12 @@ static pj_status_t get_mapped_addr(pj_stun_sock *stun_sock)
     ++stun_sock->tsx_id[5];
     status = pj_stun_session_create_req(stun_sock->stun_sess,
 					PJ_STUN_BINDING_REQUEST,
-					PJ_STUN_MAGIC, 
-					(const pj_uint8_t*)stun_sock->tsx_id, 
+					PJ_STUN_MAGIC,
+					(const pj_uint8_t*)stun_sock->tsx_id,
 					&tdata);
     if (status != PJ_SUCCESS)
 	goto on_error;
-    
+
     /* Send request */
     status=pj_stun_session_send_msg(stun_sock->stun_sess, INTERNAL_MSG_TOKEN,
 				    PJ_FALSE, PJ_TRUE, &stun_sock->srv_addr,
@@ -613,13 +866,67 @@ static pj_status_t get_mapped_addr(pj_stun_sock *stun_sock)
     if (status != PJ_SUCCESS && status != PJ_EPENDING)
 	goto on_error;
 
+    /* Simon */
+//    for(unsigned ui = 0; ui < stun_sock->stun_serv_num; ui++){
+//		++stun_sock->stun_tsx_id[ui][5];
+//		status = pj_stun_session_create_req(stun_sock->stun_sess,
+//				PJ_STUN_BINDING_REQUEST,
+//				PJ_STUN_MAGIC, (const pj_uint8_t*) stun_sock->stun_tsx_id[ui], &tdata);
+//		if (status != PJ_SUCCESS)
+//			goto on_error;
+//
+//		/* Send request */
+//		status = pj_stun_session_send_msg(stun_sock->stun_sess,
+//				&stun_sock->stun_mapped_addrs[ui], PJ_FALSE, PJ_TRUE, &stun_sock->stun_addrs[ui],
+//				pj_sockaddr_get_len(&stun_sock->stun_addrs[ui]), tdata);
+//		if (status != PJ_SUCCESS && status != PJ_EPENDING)
+//			goto on_error;
+//    }
+
     return PJ_SUCCESS;
 
 on_error:
     sess_fail(stun_sock, PJ_STUN_SOCK_BINDING_OP, status);
     return status;
 }
+#else
+static pj_status_t get_mapped_addr(pj_stun_sock *stun_sock)
+{
+//    pj_stun_tx_data *tdata;
+    pj_status_t status;
 
+
+    /* Simon */
+    for(unsigned ui = 0; ui < stun_sock->stun_serv_num; ui++){
+    	pj_stun_bind_session * bs = &stun_sock->bind_sessions[ui];
+
+    	/* Increment request counter and create STUN Binding request */
+		++bs->stun_tsx_id[5];
+		status = pj_stun_session_create_req(stun_sock->stun_sess,
+				PJ_STUN_BINDING_REQUEST,
+				PJ_STUN_MAGIC, (const pj_uint8_t*) bs->stun_tsx_id, &stun_sock->stun_bind_tdatas[ui]);
+		if (status != PJ_SUCCESS)
+			goto on_error;
+
+		/* Send request */
+		status = pj_stun_session_send_msg(stun_sock->stun_sess,
+				&bs->stun_mapped_addr, PJ_FALSE, PJ_TRUE, &bs->stun_serv_addr,
+				pj_sockaddr_get_len(&bs->stun_serv_addr), stun_sock->stun_bind_tdatas[ui]);
+		if (status != PJ_SUCCESS && status != PJ_EPENDING)
+			goto on_error;
+    }
+
+    start_stun_to_timer(stun_sock);
+
+    return PJ_SUCCESS;
+
+on_error:
+    sess_fail(stun_sock, PJ_STUN_SOCK_BINDING_OP, status);
+    return status;
+}
+#endif
+
+#if 0
 /* Get info */
 PJ_DEF(pj_status_t) pj_stun_sock_get_info( pj_stun_sock *stun_sock,
 					   pj_stun_sock_info *info)
@@ -634,8 +941,93 @@ PJ_DEF(pj_status_t) pj_stun_sock_get_info( pj_stun_sock *stun_sock,
     /* Copy STUN server address and mapped address */
     pj_memcpy(&info->srv_addr, &stun_sock->srv_addr,
 	      sizeof(pj_sockaddr));
-    pj_memcpy(&info->mapped_addr, &stun_sock->mapped_addr, 
+    pj_memcpy(&info->mapped_addr, &stun_sock->mapped_addr,
 	      sizeof(pj_sockaddr));
+
+    /* Retrieve bound address */
+    addr_len = sizeof(info->bound_addr);
+    status = pj_sock_getsockname(stun_sock->sock_fd, &info->bound_addr,
+				 &addr_len);
+    if (status != PJ_SUCCESS) {
+	pj_grp_lock_release(stun_sock->grp_lock);
+	return status;
+    }
+
+    /* If socket is bound to a specific interface, then only put that
+     * interface in the alias list. Otherwise query all the interfaces
+     * in the host.
+     */
+    if (pj_sockaddr_has_addr(&info->bound_addr)) {
+	info->alias_cnt = 1;
+	pj_sockaddr_cp(&info->aliases[0], &info->bound_addr);
+    } else {
+	pj_sockaddr def_addr;
+	pj_uint16_t port = pj_sockaddr_get_port(&info->bound_addr);
+	unsigned i;
+
+	/* Get the default address */
+	status = pj_gethostip(stun_sock->af, &def_addr);
+	if (status != PJ_SUCCESS) {
+	    pj_grp_lock_release(stun_sock->grp_lock);
+	    return status;
+	}
+
+	pj_sockaddr_set_port(&def_addr, port);
+
+	/* Enum all IP interfaces in the host */
+	info->alias_cnt = PJ_ARRAY_SIZE(info->aliases);
+	status = pj_enum_ip_interface(stun_sock->af, &info->alias_cnt,
+				      info->aliases);
+	if (status != PJ_SUCCESS) {
+	    pj_grp_lock_release(stun_sock->grp_lock);
+	    return status;
+	}
+
+	/* Set the port number for each address.
+	 */
+	for (i=0; i<info->alias_cnt; ++i) {
+	    pj_sockaddr_set_port(&info->aliases[i], port);
+	}
+
+	/* Put the default IP in the first slot */
+	for (i=0; i<info->alias_cnt; ++i) {
+	    if (pj_sockaddr_cmp(&info->aliases[i], &def_addr)==0) {
+		if (i!=0) {
+		    pj_sockaddr_cp(&info->aliases[i], &info->aliases[0]);
+		    pj_sockaddr_cp(&info->aliases[0], &def_addr);
+		}
+		break;
+	    }
+	}
+    }
+
+    pj_grp_lock_release(stun_sock->grp_lock);
+    return PJ_SUCCESS;
+}
+#else
+/* Get info */
+PJ_DEF(pj_status_t) pj_stun_sock_get_info( pj_stun_sock *stun_sock,
+					   pj_stun_sock_info *info)
+{
+    int addr_len;
+    pj_status_t status;
+
+    PJ_ASSERT_RETURN(stun_sock && info, PJ_EINVAL);
+
+    pj_grp_lock_acquire(stun_sock->grp_lock);
+
+    /* Copy STUN server address and mapped address */
+//    pj_memcpy(&info->srv_addr, &stun_sock->srv_addr,
+//	      sizeof(pj_sockaddr));
+//    pj_memcpy(&info->mapped_addr, &stun_sock->mapped_addr,
+//	      sizeof(pj_sockaddr));
+
+    // Simon
+	pj_sockaddr * srv_addr = &stun_sock->bind_sessions[0].stun_serv_addr;
+	pj_sockaddr * mapped_addr = &stun_sock->bind_sessions[0].stun_mapped_addr;
+	pj_memcpy(&info->srv_addr, srv_addr, sizeof(pj_sockaddr));
+	pj_memcpy(&info->mapped_addr, mapped_addr, sizeof(pj_sockaddr));
+
 
     /* Retrieve bound address */
     addr_len = sizeof(info->bound_addr);
@@ -698,6 +1090,23 @@ PJ_DEF(pj_status_t) pj_stun_sock_get_info( pj_stun_sock *stun_sock,
     return PJ_SUCCESS;
 }
 
+PJ_DECL(pj_status_t) pj_stun_sock_get_mapped_addrs(pj_stun_sock *stun_sock,
+					 unsigned mapped_addrs_size,
+					 pj_sockaddr mapped_addrs[],
+					 unsigned * p_mapped_addr_coun){
+	PJ_ASSERT_RETURN(stun_sock && mapped_addrs, PJ_EINVAL);
+	pj_grp_lock_acquire(stun_sock->grp_lock);
+	for(unsigned ui = 0; ui < stun_sock->stun_serv_num; ui++){
+		pj_stun_bind_session * bs = &stun_sock->bind_sessions[ui];
+		pj_memcpy(&mapped_addrs[ui], &bs->stun_mapped_addr, sizeof(pj_sockaddr));
+	}
+	*p_mapped_addr_coun = stun_sock->stun_serv_num;
+	pj_grp_lock_release(stun_sock->grp_lock);
+	return PJ_SUCCESS;
+}
+#endif
+
+
 /* Send application data */
 PJ_DEF(pj_status_t) pj_stun_sock_sendto( pj_stun_sock *stun_sock,
 					 pj_ioqueue_op_key_t *send_key,
@@ -757,7 +1166,7 @@ static pj_status_t sess_on_send_msg(pj_stun_session *sess,
 	return PJ_EINVALIDOP;
     }
 
-    pj_assert(token==INTERNAL_MSG_TOKEN);
+//    pj_assert(token==INTERNAL_MSG_TOKEN); // comment out by Simon
     PJ_UNUSED_ARG(token);
 
     PJ_LOG(1,("simon-dbg", "sess_on_send_msg ======================="));
@@ -772,9 +1181,140 @@ static pj_status_t sess_on_send_msg(pj_stun_session *sess,
 				pkt, &size, 0, dst_addr, addr_len);
 }
 
+#if 1 /* Simon */
+
+static pj_bool_t process_bind_result(pj_stun_sock *stun_sock,
+	     pj_status_t status,
+	     void *token,
+	     pj_stun_tx_data *tdata,
+	     const pj_stun_msg *response,
+	     const pj_sockaddr_t *src_addr,
+	     unsigned src_addr_len,
+		 pj_bool_t * p_mapped_changed){
+
+	*p_mapped_changed = PJ_FALSE;
+
+	const pj_stun_sockaddr_attr *mapped_attr = NULL;
+	if(status == PJ_SUCCESS){
+		mapped_attr = (const pj_stun_sockaddr_attr*) pj_stun_msg_find_attr(
+				response, PJ_STUN_ATTR_XOR_MAPPED_ADDR, 0);
+		if (mapped_attr == NULL) {
+			mapped_attr = (const pj_stun_sockaddr_attr*) pj_stun_msg_find_attr(
+					response, PJ_STUN_ATTR_MAPPED_ADDR, 0);
+		}
+
+		if (mapped_attr == NULL) {
+			status = PJNATH_ESTUNNOMAPPEDADDR;
+		}
+	}
+
+	pj_bool_t complete_with_OK = PJ_TRUE;
+    unsigned done_num = 0;
+    for(unsigned ui = 0; ui < stun_sock->stun_serv_num; ui++){
+    	pj_stun_bind_session * bs = &stun_sock->bind_sessions[ui];
+    	if(token == &bs->stun_mapped_addr){
+    		bs->stun_result = status;
+    		if(mapped_attr){
+
+    			pj_bool_t changed = PJ_FALSE;
+    			if(!(*p_mapped_changed)){
+    				changed = !pj_sockaddr_has_addr(&bs->stun_mapped_addr)
+							|| pj_sockaddr_cmp(&bs->stun_mapped_addr,
+									&mapped_attr->sockaddr) != 0;
+
+    				*p_mapped_changed = changed;
+    			}
+
+    			pj_sockaddr_cp(&bs->stun_mapped_addr, &mapped_attr->sockaddr);
+				/* Print mapped adress */
+				if (changed) {
+					char addrinfo[PJ_INET6_ADDRSTRLEN + 10];
+					PJ_LOG(4,
+							(stun_sock->obj_name, "STUN mapped address found/changed: %s", pj_sockaddr_print(&mapped_attr->sockaddr, addrinfo, sizeof(addrinfo), 3)));
+				}
+    		}
+    	}
+    	if(bs->stun_result >= 0){
+    		done_num++;
+    	}
+    	if(bs->stun_result != PJ_SUCCESS){
+    		complete_with_OK = PJ_FALSE;
+    	}
+    }
+
+    if(done_num == (stun_sock->stun_serv_num)){
+    	stun_sock->stun_bind_complete = PJ_TRUE;
+    }
+
+    return complete_with_OK;
+}
+
 /* This callback is called by the STUN session when outgoing transaction 
  * is complete
  */
+static void sess_on_request_complete(pj_stun_session *sess,
+				     pj_status_t status,
+				     void *token,
+				     pj_stun_tx_data *tdata,
+				     const pj_stun_msg *response,
+				     const pj_sockaddr_t *src_addr,
+				     unsigned src_addr_len)
+{
+    pj_stun_sock *stun_sock;
+    pj_stun_sock_op op;
+    pj_bool_t mapped_changed = PJ_FALSE;
+    pj_bool_t resched = PJ_TRUE;
+
+    stun_sock = (pj_stun_sock *) pj_stun_session_get_user_data(sess);
+    if (!stun_sock) 	return;
+
+    PJ_UNUSED_ARG(tdata);
+    PJ_UNUSED_ARG(token);
+    PJ_UNUSED_ARG(src_addr);
+    PJ_UNUSED_ARG(src_addr_len);
+
+    pj_bool_t complete_with_OK = PJ_TRUE;
+    pj_bool_t all_complete;
+    pj_grp_lock_acquire(stun_sock->grp_lock);
+//		if(stun_sock->stun_to_canceling){
+//			pj_grp_lock_release(stun_sock->grp_lock);
+//			return;
+//		}
+		if(!stun_sock->stun_bind_complete){
+			op = PJ_STUN_SOCK_BINDING_OP;
+		}else{
+			op = PJ_STUN_SOCK_KEEP_ALIVE_OP;
+		}
+		complete_with_OK = process_bind_result(stun_sock, status, token, tdata, response, src_addr, src_addr_len, &mapped_changed);
+		all_complete = stun_sock->stun_bind_complete;
+    pj_grp_lock_release(stun_sock->grp_lock);
+    if(op == PJ_STUN_SOCK_BINDING_OP){
+    	if(!all_complete)  	return;
+    	// all bind request had completed, cancel timeout timer
+    	pj_timer_heap_cancel_if_active(stun_sock->stun_cfg.timer_heap, &stun_sock->stun_to_timer, 0);
+    }
+
+
+    if(!complete_with_OK){
+    	resched = sess_fail(stun_sock, op, PJNATH_ESTUNNOMAPPEDADDR);
+    	goto on_return;
+    }
+
+	if (mapped_changed) {
+		if (op == PJ_STUN_SOCK_KEEP_ALIVE_OP)
+			op = PJ_STUN_SOCK_MAPPED_ADDR_CHANGE;
+	}
+
+	/* Notify user */
+	resched = (*stun_sock->cb.on_status)(stun_sock, op, PJ_SUCCESS);
+
+on_return:
+    /* Start/restart keep-alive timer */
+    if (resched)
+	start_ka_timer(stun_sock);
+}
+
+#else
 static void sess_on_request_complete(pj_stun_session *sess,
 				     pj_status_t status,
 				     void *token,
@@ -857,6 +1397,8 @@ on_return:
     if (resched)
 	start_ka_timer(stun_sock);
 }
+#endif
+
 
 /* Schedule keep-alive timer */
 static void start_ka_timer(pj_stun_sock *stun_sock)
@@ -900,6 +1442,7 @@ static void ka_timer_cb(pj_timer_heap_t *th, pj_timer_entry *te)
     pj_grp_lock_release(stun_sock->grp_lock);
 }
 
+#if 0
 /* Callback from active socket when incoming packet is received */
 static pj_bool_t on_data_recvfrom(pj_activesock_t *asock,
 				  void *data,
@@ -949,6 +1492,7 @@ static pj_bool_t on_data_recvfrom(pj_activesock_t *asock,
 	PJ_STUN_GET_METHOD(type) != PJ_STUN_BINDING_METHOD ||
 	pj_memcmp(hdr->tsx_id, stun_sock->tsx_id, 10) != 0) 
     {
+
 	/* Not STUN Binding response, or STUN transaction ID mismatch.
 	 * This is not our message too -- give it to application.
 	 */
@@ -975,6 +1519,97 @@ process_app_data:
     status = pj_grp_lock_release(stun_sock->grp_lock);
     return status!=PJ_EGONE ? PJ_TRUE : PJ_FALSE;
 }
+#else
+/* Callback from active socket when incoming packet is received */
+static pj_bool_t on_data_recvfrom(pj_activesock_t *asock,
+				  void *data,
+				  pj_size_t size,
+				  const pj_sockaddr_t *src_addr,
+				  int addr_len,
+				  pj_status_t status)
+{
+    pj_stun_sock *stun_sock;
+    pj_stun_msg_hdr *hdr;
+    pj_uint16_t type;
+
+    stun_sock = (pj_stun_sock*) pj_activesock_get_user_data(asock);
+    if (!stun_sock)
+	return PJ_FALSE;
+
+    /* Log socket error */
+    if (status != PJ_SUCCESS) {
+	PJ_PERROR(2,(stun_sock->obj_name, status, "recvfrom() error"));
+	return PJ_TRUE;
+    }
+
+    pj_grp_lock_acquire(stun_sock->grp_lock);
+
+    /* Check that this is STUN message */
+    status = pj_stun_msg_check((const pj_uint8_t*)data, size,
+    			       PJ_STUN_IS_DATAGRAM | PJ_STUN_CHECK_PACKET);
+    if (status != PJ_SUCCESS) {
+	/* Not STUN -- give it to application */
+	goto process_app_data;
+    }
+
+    /* Treat packet as STUN header and copy the STUN message type.
+     * We don't want to access the type directly from the header
+     * since it may not be properly aligned.
+     */
+    hdr = (pj_stun_msg_hdr*) data;
+    pj_memcpy(&type, &hdr->type, 2);
+    type = pj_ntohs(type);
+
+    /* If the packet is a STUN Binding response and part of the
+     * transaction ID matches our internal ID, then this is
+     * our internal STUN message (Binding request or keep alive).
+     * Give it to our STUN session.
+     */
+    if (!PJ_STUN_IS_RESPONSE(type) ||
+	PJ_STUN_GET_METHOD(type) != PJ_STUN_BINDING_METHOD )
+    {
+
+	/* Not STUN Binding response, or STUN transaction ID mismatch.
+	 * This is not our message too -- give it to application.
+	 */
+	goto process_app_data;
+    }
+
+    /* Simon */
+    pj_bool_t matched = PJ_FALSE;
+	for (unsigned ui = 0; ui < stun_sock->stun_serv_num; ui++) {
+		pj_stun_bind_session * bs = &stun_sock->bind_sessions[ui];
+		if (pj_memcmp(hdr->tsx_id, bs->stun_tsx_id, 10) == 0) {
+			matched = PJ_TRUE;
+			break;
+		}
+	}
+	if(!matched){
+		goto process_app_data;
+	}
+
+    /* This is our STUN Binding response. Give it to the STUN session */
+    status = pj_stun_session_on_rx_pkt(stun_sock->stun_sess, data, size,
+				       PJ_STUN_IS_DATAGRAM, NULL, NULL,
+				       src_addr, addr_len);
+
+    status = pj_grp_lock_release(stun_sock->grp_lock);
+
+    return status!=PJ_EGONE ? PJ_TRUE : PJ_FALSE;
+
+process_app_data:
+    if (stun_sock->cb.on_rx_data) {
+	(*stun_sock->cb.on_rx_data)(stun_sock, data, (unsigned)size,
+				    src_addr, addr_len);
+	status = pj_grp_lock_release(stun_sock->grp_lock);
+	return status!=PJ_EGONE ? PJ_TRUE : PJ_FALSE;
+    }
+
+    status = pj_grp_lock_release(stun_sock->grp_lock);
+    return status!=PJ_EGONE ? PJ_TRUE : PJ_FALSE;
+}
+#endif
+
 
 /* Callback from active socket about send status */
 static pj_bool_t on_data_sent(pj_activesock_t *asock,
@@ -1013,4 +1648,5 @@ static pj_bool_t on_data_sent(pj_activesock_t *asock,
 
     return PJ_TRUE;
 }
+
 

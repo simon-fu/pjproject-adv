@@ -28,8 +28,15 @@ struct eice_context{
 
 class eice_config{
 public:
-	std::string turn_host;
+	std::string turn_host; // default turn server
 	int turn_port;
+    
+//    std::string turn_all_hosts[PJ_STUN_SOCK_MAX_STUN_NUM]; // all turn servers
+//    int turn_all_port[PJ_STUN_SOCK_MAX_STUN_NUM];
+//    int turn_num;
+    
+    stun_bind_cfg bind_cfg;
+    
 	int comp_count;
 };
 
@@ -41,7 +48,7 @@ struct eice_st{
     int cp_inited;
 
     pj_pool_t *ice_pool;
-    int ice_pool_inited;
+
 
     pj_lock_t	    *lock;
 
@@ -169,12 +176,12 @@ void eice_exit() {
 static std::string _json_get_string(Json::Value& request, const char * name,
 		const std::string& default_value) {
 	if (request[name].isNull()) {
-		dbgi("name %s NOT found in json!!!\n", name);
+		dbgw("name %s NOT found in json!!!", name);
 		return default_value;
 	}
 
 	if (!request[name].isString()) {
-		dbgi("name %s is NOT string in json!!!\n", name);
+		dbgw("name %s is NOT string in json!!!", name);
 		return default_value;
 	}
 	return request[name].asString();
@@ -183,12 +190,12 @@ static std::string _json_get_string(Json::Value& request, const char * name,
 static int _json_get_int(Json::Value& request, const char * name,
 		unsigned int default_value) {
 	if (request[name].isNull()) {
-		dbge("name %s NOT found in json!!!\n", name);
+		dbgw("name %s NOT found in json!!!", name);
 		return default_value;
 	}
 
 	if (!request[name].isUInt()) {
-		dbge("name %s is NOT UInt in json!!!\n", name);
+		dbgw("name %s is NOT UInt in json!!!", name);
 		return default_value;
 	}
 	return request[name].asInt();
@@ -199,19 +206,19 @@ const Json::Value& _json_get_array(Json::Value& request, const char * name, cons
 {
 	if(request[name].isNull())
 	{
-		dbge("name %s NOT found in json!!!\n", name);
+		dbgw("name %s NOT found in json!!!", name);
 		return default_value;
 	}
 
 	if(!request[name].isArray())
 	{
-		dbge("name %s is NOT array in json!!!\n", name);
+		dbgw("name %s is NOT array in json!!!", name);
 		return default_value;
 	}
 	return request[name];
 }
 
-static eice_config * parse_eice_config(const char * config_json){
+static eice_config * parse_eice_config(eice_t obj, const char * config_json){
 	int ret = -1;
 	eice_config * cfg = new eice_config;
 	Json::Reader reader;
@@ -223,7 +230,7 @@ static eice_config * parse_eice_config(const char * config_json){
 		}
 
 		if (!reader.parse(config_json, value)) {
-			dbge("parse config JSON fail!!!\n");
+			dbge("parse config JSON fail!!!");
 			ret = -1;
 			break;
 		}
@@ -231,6 +238,31 @@ static eice_config * parse_eice_config(const char * config_json){
 		cfg->turn_host = _json_get_string(value, "turnHost", std::string(""));
 		cfg->turn_port = _json_get_int(value, "turnPort", 3478);
 		cfg->comp_count = _json_get_int(value, "compCount", 2);
+        
+//        cfg->turn_num = 0;
+        cfg->bind_cfg.stun_serv_num = 0;
+        cfg->bind_cfg.stun_bind_timeout = 3000;
+        Json::Value turnAddrs = _json_get_array(value, "turnAddrs",Json::Value());
+        if (!turnAddrs.empty()) {
+            dbgi("turn addr num %d", turnAddrs.size());
+            for(unsigned int ui = 0; ui < turnAddrs.size(); ui++){
+                Json::Value json_addr_value = turnAddrs[ui];
+                std::string host = _json_get_string(json_addr_value, "host", std::string(""));
+                int port = _json_get_int(json_addr_value, "port", 3478);
+//                cfg->turn_all_hosts[ui] = host;
+//                cfg->turn_all_port[ui] = port;
+                pj_strdup2_with_null(obj->ice_pool, &cfg->bind_cfg.stun_serv_ips[ui], host.c_str());
+                cfg->bind_cfg.stun_serv_ports[ui] = port;
+            }
+//            cfg->turn_num = turnAddrs.size();
+            cfg->bind_cfg.stun_serv_num = turnAddrs.size();
+        }
+        
+        if(cfg->turn_host.empty() && turnAddrs.size() > 0){
+            cfg->turn_host = std::string(cfg->bind_cfg.stun_serv_ips[0].ptr, cfg->bind_cfg.stun_serv_ips[0].slen);
+            cfg->turn_port = cfg->bind_cfg.stun_serv_ports[0];
+        }
+        
         ret = 0;
 	} while (0);
 
@@ -242,9 +274,14 @@ static eice_config * parse_eice_config(const char * config_json){
 }
 
 static void dump_eice_config(eice_config * cfg){
-	dbgi("turnHost: %s", cfg->turn_host.c_str());
-	dbgi("turnPort: %d", cfg->turn_port);
+    dbgi("=== eice_config ===>");
+	dbgi("defalut turn server: %s:%d", cfg->turn_host.c_str(), cfg->turn_port);
 	dbgi("compCount: %d", cfg->comp_count);
+    dbgi("turnAddrs num: %d", cfg->bind_cfg.stun_serv_num);
+    for(int i = 0; i < cfg->bind_cfg.stun_serv_num; i++){
+        dbgi("turnAddrs[%d]: %s:%d", i, cfg->bind_cfg.stun_serv_ips[i].ptr, cfg->bind_cfg.stun_serv_ports[i]);
+    }
+    dbgi("<=== eice_config ===");
 }
 
 
@@ -374,13 +411,8 @@ int eice_new(const char* config, pj_ice_sess_role role, eice_t * pobj) {
 		obj = (eice_t) malloc(sizeof(struct eice_st));
         memset(obj, 0, sizeof(struct eice_st));
 
-		cfg = parse_eice_config(config);
-		if(!cfg){
-			ret = -1;
-			break;
-		}
-		dump_eice_config(cfg);
-		obj->cfg = cfg;
+		
+		
 		obj->role = role;
 
 		// create pool factory
@@ -396,7 +428,14 @@ int eice_new(const char* config, pj_ice_sess_role role, eice_t * pobj) {
 		/* Create application memory pool */
 		obj->ice_pool = pj_pool_create(&obj->cp.factory, "eice_pool",
 				512, 512, NULL);
-		obj->ice_pool_inited = 1;
+        
+        cfg = parse_eice_config(obj, config);
+        if(!cfg){
+            ret = -1;
+            break;
+        }
+        dump_eice_config(cfg);
+        obj->cfg = cfg;
 
 		ret = pj_lock_create_recursive_mutex(obj->ice_pool, NULL, &obj->lock);
 		if (ret != PJ_SUCCESS) {
@@ -460,9 +499,17 @@ int eice_new(const char* config, pj_ice_sess_role role, eice_t * pobj) {
 		icecb.on_ice_complete = cb_on_ice_complete;
 
 		// create ice strans instance;
-		ret = pj_ice_strans_create(NULL, &obj->ice_cfg,
-				cfg->comp_count, obj, &icecb,
-				&obj->icest);
+        if(obj->cfg->bind_cfg.stun_serv_num == 0){
+            ret = pj_ice_strans_create(NULL, &obj->ice_cfg,
+                                cfg->comp_count, obj, &icecb,
+                                &obj->icest);
+        }else{
+            ret = pj_ice_strans_create_ext(NULL, &obj->ice_cfg,
+                                cfg->comp_count, obj, &icecb,
+                                &obj->cfg->bind_cfg,
+                                &obj->icest);
+        }
+		
 		if (ret != PJ_SUCCESS) {
             pj_str_t es = pj_strerror(ret, obj->err_str, sizeof(obj->err_str));
 			dbge("error creating ice strans, ret=%d(%s)", ret, es.ptr);
@@ -676,7 +723,7 @@ static void dump_cand(pj_ice_sess_cand * cand, const char * prefix){
 						, ip, port, rel_ip, rel_port);
 }
 
-int parse_content(const char * content, int content_len
+static int parse_content(eice_t obj, const char * content, int content_len
 		, std::string& ufrag, std::string& pwd, pj_ice_sess_cand cands[], int& cand_count){
 	int ret = -1;
 	do{
@@ -722,7 +769,8 @@ int parse_content(const char * content, int content_len
 			}
 
 			std::string founda = _json_get_string(json_val_cand, "foundation", std::string(""));
-			pj_cstr(&cand->foundation, founda.c_str());
+			//pj_cstr(&cand->foundation, founda.c_str());
+            pj_strdup2_with_null(obj->ice_pool, &cand->foundation, founda.c_str());
 			cand->prio = _json_get_int(json_val_cand, "priority", -1);
 
 			std::string typ = _json_get_string(json_val_cand, "type",
@@ -742,7 +790,8 @@ int parse_content(const char * content, int content_len
 					std::string(""));
 			int port = _json_get_int(json_val_cand, "port", 0);
 			pj_str_t str;
-			pj_cstr(&str, ip.c_str());
+			//pj_cstr(&str, ip.c_str());
+            pj_strdup2_with_null(obj->ice_pool, &str, ip.c_str());
 			pj_sockaddr_init(pj_AF_INET(), &cand->addr, &str, port);
 
 			std::string rel_addr = _json_get_string(json_val_cand, "rel-addr",
@@ -750,7 +799,8 @@ int parse_content(const char * content, int content_len
 			int rel_port = _json_get_int(json_val_cand, "rel-port", 0);
 
 			pj_str_t pj_str_reladdr;
-			pj_cstr(&pj_str_reladdr, rel_addr.c_str());
+//			pj_cstr(&pj_str_reladdr, rel_addr.c_str());
+            pj_strdup2_with_null(obj->ice_pool, &pj_str_reladdr, rel_addr.c_str());
 			pj_sockaddr_init(pj_AF_INET(), &cand->rel_addr, &pj_str_reladdr,
 					rel_port);
 
@@ -772,7 +822,7 @@ int eice_start_nego(eice_t obj, const char * remote_content, int remote_content_
 		// parse remote content
 		std::string ufrag;
 		std::string pwd;
-		ret = parse_content(remote_content, remote_content_len, ufrag, pwd,
+		ret = parse_content(obj, remote_content, remote_content_len, ufrag, pwd,
 				obj->remote_cands, obj->remote_cand_count);
 		if (ret != 0) {
 			dbge("parse remote content fail !!!");
@@ -780,8 +830,11 @@ int eice_start_nego(eice_t obj, const char * remote_content, int remote_content_
 		}
 
 		pj_str_t rufrag, rpwd;
-		pj_cstr(&rufrag, ufrag.c_str());
-		pj_cstr(&rpwd, pwd.c_str());
+//		pj_cstr(&rufrag, ufrag.c_str());
+        pj_strdup2_with_null(obj->ice_pool, &rufrag, ufrag.c_str());
+        
+//		pj_cstr(&rpwd, pwd.c_str());
+        pj_strdup2_with_null(obj->ice_pool, &rpwd, pwd.c_str());
 
 		ret = pj_ice_strans_start_ice(obj->icest, &rufrag, &rpwd,
 				obj->remote_cand_count, obj->remote_cands);
@@ -982,14 +1035,32 @@ void eice_set_log_func(eice_log_func * log_func){
     pj_log_set_log_func(log_func);
 }
 
-
+void test_log_func(int level, const char *data, int len){
+//    printf("%s", data);
+}
 
 int eice_test(){
-    const char * config_json = "{\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,\"compCount\":2}";
+//    new InetSocketAddress("203.195.185.236", 3488), // turn1
+//    new InetSocketAddress("121.41.75.10", 3488), // turn3
+    
+//    const char * config_json = "{\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,\"compCount\":2}";
 //    const char * config_json = "{\"turnHost\":\"203.195.185.36\",\"turnPort\":3488,\"compCount\":2}"; // error ip
+    
+    const char * config_json = "{"
+//        "\"turnHost\":\"203.195.185.236\",\"turnPort\":3488,"
+        "\"compCount\":2,"
+        "\"turnAddrs\":["
+            "{\"host\":\"203.195.185.236\",\"port\":3488}," // turn1
+            "{\"host\":\"121.41.75.10\",\"port\":3488}" // turn3
+            "]"
+        "}";
+    
+
     int ret = 0;
 
     eice_init();
+    
+//    eice_set_log_func(test_log_func);
     
     char * caller_content = new char[8*1024];
     int caller_content_len = 0;
@@ -1003,9 +1074,9 @@ int eice_test(){
 
     ret = eice_caller_nego(caller, callee_content, callee_content_len, 0, 0);
 
-    char caller_result[256];
+    char * caller_result = new char[8*1024];
     int caller_result_len = 0;
-    char callee_result[256];
+    char * callee_result = new char[8*1024];
     int callee_result_len = 0;
     while(caller_result_len == 0 && callee_result_len == 0){
     	if(caller_result_len == 0){
@@ -1025,7 +1096,10 @@ int eice_test(){
     
     eice_exit();
     
+    delete []caller_result;
     delete []caller_content;
+    
+    delete []callee_result;
     delete []callee_content;
     
     return ret;

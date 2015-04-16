@@ -493,6 +493,25 @@ PJ_DECL(pj_sock_t) pj_stun_sock_get_fd(pj_stun_sock *stun_sock);
  * @}
  */
 
+/*
+ *  Simon
+ */
+#define PJ_STUN_SOCK_MAX_STUN_NUM	8 /* Simon */
+typedef struct {
+	pj_str_t stun_serv_ips[PJ_STUN_SOCK_MAX_STUN_NUM];
+	pj_uint16_t stun_serv_ports[PJ_STUN_SOCK_MAX_STUN_NUM];
+	unsigned stun_serv_num;
+	unsigned stun_bind_timeout;
+}stun_bind_cfg;
+
+PJ_DECL(pj_status_t) pj_stun_sock_start_ext(pj_stun_sock *stun_sock,
+		const stun_bind_cfg * bind_cfg);
+
+PJ_DECL(pj_status_t) pj_stun_sock_get_mapped_addrs(pj_stun_sock *stun_sock,
+					 unsigned mapped_addrs_size,
+					 pj_sockaddr mapped_addrs[],
+					 unsigned * p_mapped_addr_coun);
+
 
 PJ_END_DECL
 

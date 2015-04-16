@@ -137,6 +137,13 @@ static void destroy_ice_st(pj_ice_strans *ice_st);
 #define ice_st_perror(ice_st,msg,rc) pjnath_perror(ice_st->obj_name,msg,rc)
 static void sess_init_update(pj_ice_strans *ice_st);
 
+// Simon
+typedef struct{
+	int cand_idx;
+	pj_sockaddr mapped_addr;
+}pj_srflx_cand;
+
+
 /**
  * This structure describes an ICE stream transport component. A component
  * in ICE stream transport typically corresponds to a single socket created
@@ -166,6 +173,13 @@ typedef struct pj_ice_strans_comp
     // Simon
     int ttl;
     unsigned ttl_sent_count;
+
+    pj_srflx_cand srflx_cands[PJ_STUN_SOCK_MAX_STUN_NUM];
+    unsigned srflx_cand_coiunt;
+
+    pj_sockaddr mapped_addrs[PJ_STUN_SOCK_MAX_STUN_NUM];
+    unsigned mapped_addr_count;
+
 } pj_ice_strans_comp;
 
 
@@ -192,6 +206,10 @@ struct pj_ice_strans
 
     pj_bool_t		     destroy_req;/**< Destroy has been called?	*/
     pj_bool_t		     cb_called;	/**< Init error callback called?*/
+
+    // Simon
+    const stun_bind_cfg * bind_cfg;
+
 };
 
 
@@ -437,39 +455,93 @@ static pj_status_t create_comp(pj_ice_strans *ice_st, unsigned comp_id)
 
 	    pj_log_push_indent();
 
-	    /* Start Binding resolution */
-	    status = pj_stun_sock_start(comp->stun_sock,
-					&ice_st->cfg.stun.server,
-					ice_st->cfg.stun.port,
-					ice_st->cfg.resolver);
-	    if (status != PJ_SUCCESS) {
-		///sess_dec_ref(ice_st);
-		pj_log_pop_indent();
-		return status;
+
+	    // Simon
+	    if(!ice_st->bind_cfg){
+		    /* Start Binding resolution */
+		    status = pj_stun_sock_start(comp->stun_sock,
+						&ice_st->cfg.stun.server,
+						ice_st->cfg.stun.port,
+						ice_st->cfg.resolver);
+		    if (status != PJ_SUCCESS) {
+			///sess_dec_ref(ice_st);
+			pj_log_pop_indent();
+			return status;
+		    }
+
+		    /* Enumerate addresses */
+		    status = pj_stun_sock_get_info(comp->stun_sock, &stun_sock_info);
+		    if (status != PJ_SUCCESS) {
+			///sess_dec_ref(ice_st);
+			pj_log_pop_indent();
+			return status;
+		    }
+
+		    /* Add srflx candidate with pending status. */
+		    cand = &comp->cand_list[comp->cand_cnt++];
+		    cand->type = PJ_ICE_CAND_TYPE_SRFLX;
+		    cand->status = PJ_EPENDING;
+		    cand->local_pref = SRFLX_PREF;
+		    cand->transport_id = TP_STUN;
+		    cand->comp_id = (pj_uint8_t) comp_id;
+		    pj_sockaddr_cp(&cand->base_addr, &stun_sock_info.aliases[0]);
+		    pj_sockaddr_cp(&cand->rel_addr, &cand->base_addr);
+		    pj_ice_calc_foundation(ice_st->pool, &cand->foundation,
+					   cand->type, &cand->base_addr);
+
+		    /* Set default candidate to srflx */
+		    comp->default_cand = (unsigned)(cand - comp->cand_list);
+	    }else{
+			status = pj_stun_sock_start_ext(comp->stun_sock,
+					ice_st->bind_cfg);
+			if (status != PJ_SUCCESS) {
+				///sess_dec_ref(ice_st);
+				pj_log_pop_indent();
+				return status;
+			}
+
+		    /* Enumerate addresses */
+		    status = pj_stun_sock_get_info(comp->stun_sock, &stun_sock_info);
+		    if (status != PJ_SUCCESS) {
+			///sess_dec_ref(ice_st);
+			pj_log_pop_indent();
+			return status;
+		    }
+
+//		    status = pj_stun_sock_get_mapped_addrs(comp->stun_sock, PJ_STUN_SOCK_MAX_STUN_NUM, ice_st->mapped_addrs, &ice_st->mapped_addr_count);
+//			if (status != PJ_SUCCESS) {
+//				pj_log_pop_indent();
+//				return status;
+//			}
+
+			for(unsigned ui = 0; ui < ice_st->bind_cfg->stun_serv_num; ui++){
+
+
+				/* Add srflx candidate with pending status. */
+				cand = &comp->cand_list[comp->cand_cnt++];
+				cand->type = PJ_ICE_CAND_TYPE_SRFLX;
+				cand->status = PJ_EPENDING;
+				cand->local_pref = SRFLX_PREF;
+				cand->transport_id = TP_STUN;
+				cand->comp_id = (pj_uint8_t) comp_id;
+				pj_sockaddr_cp(&cand->base_addr,
+						&stun_sock_info.aliases[0]);
+				pj_sockaddr_cp(&cand->rel_addr, &cand->base_addr);
+				pj_ice_calc_foundation(ice_st->pool, &cand->foundation,
+						cand->type, &cand->base_addr);
+
+				if(ui == 0){
+					/* Set default candidate to srflx */
+					comp->default_cand = (unsigned) (cand - comp->cand_list);
+				}
+
+				pj_srflx_cand * srflx_cand = &comp->srflx_cands[ui];
+				pj_bzero(srflx_cand, sizeof(*srflx_cand));
+				srflx_cand->cand_idx = (int) (cand - comp->cand_list);
+
+			}
+
 	    }
-
-	    /* Enumerate addresses */
-	    status = pj_stun_sock_get_info(comp->stun_sock, &stun_sock_info);
-	    if (status != PJ_SUCCESS) {
-		///sess_dec_ref(ice_st);
-		pj_log_pop_indent();
-		return status;
-	    }
-
-	    /* Add srflx candidate with pending status. */
-	    cand = &comp->cand_list[comp->cand_cnt++];
-	    cand->type = PJ_ICE_CAND_TYPE_SRFLX;
-	    cand->status = PJ_EPENDING;
-	    cand->local_pref = SRFLX_PREF;
-	    cand->transport_id = TP_STUN;
-	    cand->comp_id = (pj_uint8_t) comp_id;
-	    pj_sockaddr_cp(&cand->base_addr, &stun_sock_info.aliases[0]);
-	    pj_sockaddr_cp(&cand->rel_addr, &cand->base_addr);
-	    pj_ice_calc_foundation(ice_st->pool, &cand->foundation,
-				   cand->type, &cand->base_addr);
-
-	    /* Set default candidate to srflx */
-	    comp->default_cand = (unsigned)(cand - comp->cand_list);
 
 	    pj_log_pop_indent();
 	}
@@ -542,7 +614,7 @@ static pj_status_t create_comp(pj_ice_strans *ice_st, unsigned comp_id)
     return PJ_SUCCESS;
 }
 
-
+#if 0
 /*
  * Create ICE stream transport
  */
@@ -632,6 +704,112 @@ PJ_DEF(pj_status_t) pj_ice_strans_create( const char *name,
 
     return PJ_SUCCESS;
 }
+#else
+/*
+ * Create ICE stream transport
+ */
+PJ_DEF(pj_status_t) pj_ice_strans_create_ext( const char *name,
+					  const pj_ice_strans_cfg *cfg,
+					  unsigned comp_cnt,
+					  void *user_data,
+					  const pj_ice_strans_cb *cb,
+
+					  const stun_bind_cfg * bind_cfg,
+
+					  pj_ice_strans **p_ice_st)
+{
+    pj_pool_t *pool;
+    pj_ice_strans *ice_st;
+    unsigned i;
+    pj_status_t status;
+
+    status = pj_ice_strans_cfg_check_valid(cfg);
+    if (status != PJ_SUCCESS)
+	return status;
+
+    PJ_ASSERT_RETURN(comp_cnt && cb && p_ice_st &&
+		     comp_cnt <= PJ_ICE_MAX_COMP , PJ_EINVAL);
+
+    if (name == NULL)
+	name = "ice%p";
+
+    pool = pj_pool_create(cfg->stun_cfg.pf, name, PJNATH_POOL_LEN_ICE_STRANS,
+			  PJNATH_POOL_INC_ICE_STRANS, NULL);
+    ice_st = PJ_POOL_ZALLOC_T(pool, pj_ice_strans);
+    ice_st->pool = pool;
+    ice_st->obj_name = pool->obj_name;
+    ice_st->user_data = user_data;
+    // Simon
+    ice_st->bind_cfg = bind_cfg;
+
+    PJ_LOG(4,(ice_st->obj_name,
+	      "Creating ICE stream transport with %d component(s)",
+	      comp_cnt));
+    pj_log_push_indent();
+
+    status = pj_grp_lock_create(pool, NULL, &ice_st->grp_lock);
+    if (status != PJ_SUCCESS) {
+	pj_pool_release(pool);
+	pj_log_pop_indent();
+	return status;
+    }
+
+    pj_grp_lock_add_ref(ice_st->grp_lock);
+    pj_grp_lock_add_handler(ice_st->grp_lock, pool, ice_st,
+			    &ice_st_on_destroy);
+
+    pj_ice_strans_cfg_copy(pool, &ice_st->cfg, cfg);
+    ice_st->cfg.stun.cfg.grp_lock = ice_st->grp_lock;
+    ice_st->cfg.turn.cfg.grp_lock = ice_st->grp_lock;
+    pj_memcpy(&ice_st->cb, cb, sizeof(*cb));
+
+    ice_st->comp_cnt = comp_cnt;
+    ice_st->comp = (pj_ice_strans_comp**)
+		   pj_pool_calloc(pool, comp_cnt, sizeof(pj_ice_strans_comp*));
+
+    /* Move state to candidate gathering */
+    ice_st->state = PJ_ICE_STRANS_STATE_INIT;
+
+    /* Acquire initialization mutex to prevent callback to be
+     * called before we finish initialization.
+     */
+    pj_grp_lock_acquire(ice_st->grp_lock);
+
+    for (i=0; i<comp_cnt; ++i) {
+	status = create_comp(ice_st, i+1);
+	if (status != PJ_SUCCESS) {
+	    pj_grp_lock_release(ice_st->grp_lock);
+	    destroy_ice_st(ice_st);
+	    pj_log_pop_indent();
+	    return status;
+	}
+    }
+
+    /* Done with initialization */
+    pj_grp_lock_release(ice_st->grp_lock);
+
+    PJ_LOG(4,(ice_st->obj_name, "ICE stream transport %p created", ice_st));
+
+    *p_ice_st = ice_st;
+
+    /* Check if all candidates are ready (this may call callback) */
+    sess_init_update(ice_st);
+
+    pj_log_pop_indent();
+
+    return PJ_SUCCESS;
+}
+
+PJ_DEF(pj_status_t) pj_ice_strans_create( const char *name,
+					  const pj_ice_strans_cfg *cfg,
+					  unsigned comp_cnt,
+					  void *user_data,
+					  const pj_ice_strans_cb *cb,
+					  pj_ice_strans **p_ice_st){
+	return pj_ice_strans_create_ext(name, cfg, comp_cnt, user_data, cb, NULL, p_ice_st);
+}
+#endif
+
 
 /* REALLY destroy ICE */
 static void ice_st_on_destroy(void *obj)
@@ -1555,6 +1733,8 @@ static pj_bool_t stun_on_data_sent(pj_stun_sock *stun_sock,
     return PJ_TRUE;
 }
 
+# if 0
+
 /* Notification when the status of the STUN transport has changed. */
 static pj_bool_t stun_on_status(pj_stun_sock *stun_sock,
 				pj_stun_sock_op op,
@@ -1621,6 +1801,14 @@ static pj_bool_t stun_on_status(pj_stun_sock *stun_sock,
 				    "Binding discovery complete" :
 				    "srflx address changed";
 		pj_bool_t dup = PJ_FALSE;
+
+		status = pj_stun_sock_get_mapped_addrs(comp->stun_sock,
+		PJ_STUN_SOCK_MAX_STUN_NUM, ice_st->mapped_addrs, &ice_st->mapped_addr_count);
+		if (status != PJ_SUCCESS) {
+			pj_log_pop_indent();
+			return status;
+		}
+
 
 		/* Eliminate the srflx candidate if the address is
 		 * equal to other (host) candidates.
@@ -1708,6 +1896,183 @@ static pj_bool_t stun_on_status(pj_stun_sock *stun_sock,
 
     return pj_grp_lock_dec_ref(ice_st->grp_lock)? PJ_FALSE : PJ_TRUE;
 }
+#else
+
+static void update_srflx_cand(pj_ice_strans *ice_st, pj_ice_strans_comp *comp, pj_status_t status){
+	for (unsigned i = 0; i < comp->cand_cnt; ++i) {
+		if (comp->cand_list[i].type == PJ_ICE_CAND_TYPE_SRFLX) {
+			comp->cand_list[i].status = status;
+		}
+	}
+}
+
+static pj_bool_t remove_dup_srflx_cand(pj_ice_strans *ice_st, pj_ice_strans_comp *comp, unsigned idx, const pj_sockaddr * saddr){
+	pj_bool_t dup = PJ_FALSE;
+	for (unsigned i = 0; i < comp->cand_cnt; ++i) {
+		if (comp->cand_list[i].type == PJ_ICE_CAND_TYPE_HOST
+				&& pj_sockaddr_cmp(&comp->cand_list[i].addr, saddr)
+						== 0) {
+			dup = PJ_TRUE;
+			break;
+		}
+	}
+
+	if (dup) {
+		/* Duplicate found, remove the srflx candidate */
+
+		/* Update default candidate index */
+		if (comp->default_cand > idx) {
+			--comp->default_cand;
+		} else if (comp->default_cand == idx) {
+			comp->default_cand = 0;
+		}
+
+		/* Remove srflx candidate */
+		pj_array_erase(comp->cand_list, sizeof(comp->cand_list[0]),
+				comp->cand_cnt, idx);
+		--comp->cand_cnt;
+	}
+	return dup;
+}
+
+/* Notification when the status of the STUN transport has changed. */
+static pj_bool_t stun_on_status(pj_stun_sock *stun_sock,
+				pj_stun_sock_op op,
+				pj_status_t status)
+{
+    pj_ice_strans_comp *comp;
+    pj_ice_strans *ice_st;
+
+    pj_assert(status != PJ_EPENDING);
+
+    comp = (pj_ice_strans_comp*) pj_stun_sock_get_user_data(stun_sock);
+    ice_st = comp->ice_st;
+
+    pj_grp_lock_add_ref(ice_st->grp_lock);
+
+//    pj_ice_sess_cand *cand = NULL;
+//    /* Wait until initialization completes */
+//    pj_grp_lock_acquire(ice_st->grp_lock);
+//
+//    /* Find the srflx cancidate */
+//    for (i=0; i<comp->cand_cnt; ++i) {
+//	if (comp->cand_list[i].type == PJ_ICE_CAND_TYPE_SRFLX) {
+//	    cand = &comp->cand_list[i];
+//	    break;
+//	}
+//    }
+//
+//    pj_grp_lock_release(ice_st->grp_lock);
+//
+//    /* It is possible that we don't have srflx candidate even though this
+//     * callback is called. This could happen when we cancel adding srflx
+//     * candidate due to initialization error.
+//     */
+//    if (cand == NULL) {
+//	return pj_grp_lock_dec_ref(ice_st->grp_lock) ? PJ_FALSE : PJ_TRUE;
+//    }
+
+    switch (op) {
+    case PJ_STUN_SOCK_DNS_OP:
+	if (status != PJ_SUCCESS) {
+		update_srflx_cand(ice_st, comp, status);
+
+	    if (!ice_st->cfg.stun.ignore_stun_error) {
+		sess_fail(ice_st, PJ_ICE_STRANS_OP_INIT,
+		          "DNS resolution failed", status);
+	    } else {
+		PJ_LOG(4,(ice_st->obj_name,
+			  "STUN error is ignored for comp %d",
+			  comp->comp_id));
+	    }
+	}
+	break;
+    case PJ_STUN_SOCK_BINDING_OP:
+    case PJ_STUN_SOCK_MAPPED_ADDR_CHANGE:
+	if (status == PJ_SUCCESS) {
+	    pj_stun_sock_info info;
+
+	    status = pj_stun_sock_get_info(stun_sock, &info);
+	    if (status == PJ_SUCCESS) {
+		char ipaddr[PJ_INET6_ADDRSTRLEN+10];
+		const char *op_name = (op==PJ_STUN_SOCK_BINDING_OP) ?
+				    "Binding discovery complete" :
+				    "srflx address changed";
+
+
+		status = pj_stun_sock_get_mapped_addrs(comp->stun_sock,
+				PJ_STUN_SOCK_MAX_STUN_NUM, comp->mapped_addrs, &comp->mapped_addr_count);
+		if (status != PJ_SUCCESS) {
+			pj_log_pop_indent();
+			return status;
+		}
+
+		for (unsigned ui = 0; ui < comp->mapped_addr_count;	ui++) {
+			pj_sockaddr * map_addr = &comp->mapped_addrs[ui];
+			if(comp->srflx_cands[ui].cand_idx >= 0
+					&&pj_sockaddr_cmp(&comp->srflx_cands[ui], map_addr) != 0){
+				pj_bool_t dup = remove_dup_srflx_cand(ice_st, comp, comp->srflx_cands[ui].cand_idx, map_addr);
+				if(dup){
+					comp->srflx_cands[ui].cand_idx = -1;
+				}else{
+					pj_ice_sess_cand * scand = &comp->cand_list[comp->srflx_cands[ui].cand_idx];
+					pj_sockaddr_cp(&scand->addr, map_addr);
+					scand->status = PJ_SUCCESS;
+				}
+				PJ_LOG(4,(comp->ice_st->obj_name,
+							  "Comp %d: %s, "
+							  "srflx address is %s",
+							  comp->comp_id, op_name,
+							  pj_sockaddr_print(map_addr, ipaddr, sizeof(ipaddr), 3)));
+			}
+
+		}
+
+		sess_init_update(ice_st);
+	    }
+	}
+
+	if (status != PJ_SUCCESS) {
+	    /* May not have cand, e.g. when error during init */
+		update_srflx_cand(ice_st, comp, status);
+
+	    if (!ice_st->cfg.stun.ignore_stun_error || comp->cand_cnt==1) {
+		sess_fail(ice_st, PJ_ICE_STRANS_OP_INIT,
+			  "STUN binding request failed", status);
+	    } else {
+		PJ_LOG(4,(ice_st->obj_name,
+			  "STUN error is ignored for comp %d",
+			  comp->comp_id));
+
+//		if (cand) {
+//		    unsigned idx = (unsigned)(cand - comp->cand_list);
+//
+//		    /* Update default candidate index */
+//		    if (comp->default_cand == idx) {
+//			comp->default_cand = !idx;
+//		    }
+//		}
+
+		sess_init_update(ice_st);
+	    }
+	}
+	break;
+    case PJ_STUN_SOCK_KEEP_ALIVE_OP:
+	if (status != PJ_SUCCESS) {
+	    update_srflx_cand(ice_st, comp, status);
+	    if (!ice_st->cfg.stun.ignore_stun_error) {
+		sess_fail(ice_st, PJ_ICE_STRANS_OP_INIT,
+			  "STUN keep-alive failed", status);
+	    } else {
+		PJ_LOG(4,(ice_st->obj_name, "STUN error is ignored"));
+	    }
+	}
+	break;
+    }
+
+    return pj_grp_lock_dec_ref(ice_st->grp_lock)? PJ_FALSE : PJ_TRUE;
+}
+#endif
 
 /* Callback when TURN socket has received a packet */
 static void turn_on_rx_data(pj_turn_sock *turn_sock,

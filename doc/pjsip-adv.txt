@@ -259,7 +259,7 @@ stun_sock （ pj_stun_sock ）
 stun_session （ pj_stun_session ）
   可以创建stun的请求、回应和indication包；
   创建一个 pj_stun_client_tsx 用于处理bind 发送请求和解析回应；
-  每个tsx对应一个pj_stun_tx_data数据，发送的数据放在sess->pending_request_list 里，当删除tsx的时候（stun_tsx_on_destroy）删除data
+  每个tsx对应一个 pj_stun_tx_data 数据，发送的数据放在 sess->pending_request_list 里，当删除tsx的时候（stun_tsx_on_destroy）删除data
 
     创建对象  pj_stun_session_create
     创建请求  pj_stun_session_create_req
@@ -273,7 +273,8 @@ stun_session （ pj_stun_session ）
                on_rx_indication （收到indication）
 
 stun_transaction (pj_stun_client_tsx)
-  发送stun请求和接收stun回应；会自动重发stun请求包, 重发间隔由rto确定，rto在创建对象指定的pj_stun_config里（cfg->rto_msec）；
+  发送stun请求和接收stun回应；会自动重发stun请求包( tsx_transmit_msg );
+  重发间隔由rto确定, rto在创建对象指定的 pj_stun_config 里（cfg->rto_msec）；
   rto初始为PJ_STUN_RTO_VALUE（100）毫秒，每次重发间隔都乘以2，重发7次，最后一次timeout为16*rto;
   即每次间隔为 100，200，400，800，1600，3200，1600；
     创建对象  pj_stun_client_tsx_create
@@ -302,4 +303,23 @@ pj_activesock_t
                on_accept_complete （ 接受连接， 由 pj_activesock_start_accept启动监听 ）
                on_accept_complete2 （比 on_accept_complete 多了个 status ）
                on_connect_complete （ 连接到服务器的结果 ）
+
+
+
+
+eice 设计
+=========
+{
+"candidates":
+	[
+	{"component":1,"foundation":"Sa0001a7","generation":"0","id":0,"ip":"222.35.184.151","network":"1","port":54691,"priority":1862270975,"protocol":"udp","rel-addr":"10.0.1.167","rel-port":54691,"type":"srflx"},
+	{"component":1,"foundation":"Ha0001a7","generation":"0","id":1,"ip":"10.0.1.167","network":"1","port":54691,"priority":1694498815,"protocol":"udp","type":"host"},
+	{"component":2,"foundation":"Sa0001a7","generation":"0","id":0,"ip":"222.35.184.119","network":"1","port":54914,"priority":1862270974,"protocol":"udp","rel-addr":"10.0.1.167","rel-port":54914,"type":"srflx"},
+	{"component":2,"foundation":"Ha0001a7","generation":"0","id":1,"ip":"10.0.1.167","network":"1","port":54914,"priority":1694498814,"protocol":"udp","type":"host"}
+	],
+"pwd":"353f7788",
+"ufrag":"53b39dd6"
+}
+
+
 
