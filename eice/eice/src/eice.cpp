@@ -24,6 +24,10 @@ struct eice_context{
 	int pjnath_inited;
 	int pjlog_installed;
 	FILE *log_fhnd;
+    
+    pj_caching_pool cp;
+    int cp_inited;
+    pj_pool_t * pool;
 };
 
 class eice_config{
@@ -89,19 +93,36 @@ static struct eice_context * g_eice = 0;
 static int eice_worker_thread(void *arg);
 static pj_status_t handle_events(eice_t obj, unsigned max_msec, unsigned *p_count);
 
-#define REGISTER_THREAD pj_thread_t *pthread = NULL; \
-pj_thread_desc desc; \
-pj_bool_t has_registered = PJ_FALSE; \
-has_registered = pj_thread_is_registered(); \
-if(!has_registered) { \
-if (pj_thread_register(NULL, desc, &pthread) == PJ_SUCCESS) { \
-} \
+//#define REGISTER_THREAD pj_thread_t *pthread = NULL; \
+//pj_thread_desc desc; \
+//pj_bool_t has_registered = PJ_FALSE; \
+//has_registered = pj_thread_is_registered(); \
+//if(!has_registered) { \
+//if (pj_thread_register(NULL, desc, &pthread) == PJ_SUCCESS) { \
+//} \
+//}
+
+static void register_eice_thread(pj_pool_t * pool){
+    pj_thread_t *pthread = NULL;
+//    pj_thread_desc desc;
+    pj_thread_desc * pdesc ;
+    pj_bool_t has_registered = PJ_FALSE;
+    has_registered = pj_thread_is_registered();
+    if(has_registered) return;
+    
+    pj_size_t sz =  sizeof(pj_thread_desc);
+    pdesc = (pj_thread_desc *)pj_pool_alloc(pool,sz);
+    
+    if (pj_thread_register(NULL, *pdesc, &pthread) != PJ_SUCCESS) {
+        dbge(" **** register thread ERROR ****");
+    }
 }
 
 
 static void log_func_4pj(int level, const char *data, int len) {
 
-    //REGISTER_THREAD;
+//    register_eice_thread(g_eice->pool);
+    
     if(!g_eice) return;
 
     //pj_log_write(level, data, len);
@@ -148,6 +169,16 @@ int eice_init()
             break;
         }
         g_eice->pjnath_inited = 1;
+        
+        // create pool factory
+        pj_caching_pool_init(&g_eice->cp, NULL, 0);
+        g_eice->cp_inited = 1;
+        
+        
+        /* Create application memory pool */
+        g_eice->pool = pj_pool_create(&g_eice->cp.factory, "eice_global_pool",
+                                       512, 512, NULL);
+        
 
         ret = PJ_SUCCESS;
         dbgi("eice init ok");
@@ -163,6 +194,16 @@ int eice_init()
 void eice_exit() {
 
 	if(!g_eice) return;
+    
+//    if(g_eice->pool){
+//        register_eice_thread(g_eice->pool);
+//    }
+    
+    if(g_eice->cp_inited){
+        pj_caching_pool_destroy(&g_eice->cp);
+        g_eice->cp_inited = 0;
+    }
+    
 
 	if(g_eice->pj_inited){
 		pj_shutdown();
@@ -287,8 +328,8 @@ static void dump_eice_config(eice_config * cfg){
 
 static void cb_on_ice_complete(pj_ice_strans *ice_st, pj_ice_strans_op op,
 		pj_status_t status) {
-//	REGISTER_THREAD;
 
+//    register_eice_thread(g_eice->pool);
 
     dbge("cb_on_ice_complete: op=%d", op);
     
@@ -355,7 +396,6 @@ static int query_wait(pj_lock_t * lock, int * pflag, int * pcancel, unsigned int
 
 static void get_ip_port_from_sockaddr(const pj_sockaddr *addr, char *address, int *port) {
 
-//    REGISTER_THREAD;
     if(pj_sockaddr_has_addr(addr)){
         *port = (int) pj_sockaddr_get_port(addr);
         pj_sockaddr_print(addr, address, MAX_IP_SIZE, 0);
@@ -613,10 +653,12 @@ int eice_new(const char* config, pj_ice_sess_role role, eice_t * pobj) {
 	return ret;
 }
 
+
+
 void eice_free(eice_t obj){
 	if(!obj) return ;
 
-    REGISTER_THREAD;
+    register_eice_thread(g_eice->pool);
 
 	if(obj->local_content){
 		delete obj->local_content;
@@ -627,7 +669,8 @@ void eice_free(eice_t obj){
 		delete obj->remote_content;
 		obj->remote_content = 0;
 	}
-
+    
+    
     // stop strans
     if (obj->icest) {
 
@@ -683,7 +726,9 @@ int eice_new_caller(const char* config, char * local_content,
 		int * p_local_content_len, eice_t * pobj) {
 	int ret = -1;
 	eice_t obj = 0;
-    REGISTER_THREAD
+    
+    register_eice_thread(g_eice->pool);
+    
 	do{
 		ret = eice_new(config, PJ_ICE_SESS_ROLE_CONTROLLING, &obj);
 		if(ret){
@@ -852,7 +897,8 @@ int eice_new_callee(const char* config, const char * remote_content, int remote_
 		eice_t * pobj){
 	int ret = -1;
 	eice_t obj = 0;
-    REGISTER_THREAD
+    
+    register_eice_thread(g_eice->pool);
 	do {
 		ret = eice_new(config, PJ_ICE_SESS_ROLE_CONTROLLED, &obj);
 		if (ret) {
@@ -882,7 +928,9 @@ int eice_caller_nego(eice_t obj, const char * remote_content, int remote_content
 		eice_on_nego_result_t cb, void * cbContext )
 {
 	int ret = -1;
-    REGISTER_THREAD
+    
+    register_eice_thread(g_eice->pool);
+    
 	do{
 		ret = eice_start_nego(obj, remote_content, remote_content_len);
 		if (ret != 0) {
@@ -899,7 +947,7 @@ int eice_get_nego_result(eice_t obj, char * nego_result, int * p_nego_result_len
 	int nego_done=0;
 	pj_status_t nego_status;
     
-    REGISTER_THREAD
+    register_eice_thread(g_eice->pool);
     
 	pj_lock_acquire(obj->lock);
 	nego_done = obj->ice_nego_done;
@@ -948,7 +996,7 @@ int eice_get_nego_result(eice_t obj, char * nego_result, int * p_nego_result_len
 
 static pj_status_t handle_events(eice_t obj, unsigned max_msec, unsigned *p_count) {
 
-//    REGISTER_THREAD;
+//    register_eice_thread(g_eice->pool);
 
     enum {
         MAX_NET_EVENTS = 1
@@ -1022,11 +1070,13 @@ static int eice_worker_thread(void *arg) {
 
 	eice_t obj = (eice_t) arg;
 
-//    REGISTER_THREAD;
+//    register_eice_thread(g_eice->pool);
 
     while (!obj->thread_quit_flag) {
         handle_events(obj, 500, NULL);
     }
+    
+    dbgi("eice_worker_thread exited");
 
     return 0;
 }
