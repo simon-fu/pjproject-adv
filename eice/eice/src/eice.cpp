@@ -130,56 +130,76 @@ static void log_func_4pj(int level, const char *data, int len) {
 }
 
 
-
+#define dbgraw(x) printf(x "\n")
 
 int eice_init()
 {
+    
     int ret = -1;
-
+    dbgraw("eice_init");
+    
 	if (g_eice) {
 		ret = 0;
-		dbgi("eice is already initialized, return ok directly.");
+		dbgraw("eice is already initialized, return ok directly.");
 		return 0;
 	}
 
+   
+    
 	g_eice = &g_eice_stor;
-	pj_bzero(g_eice, sizeof(struct eice_context));
+	memset(g_eice, 0, sizeof(struct eice_context));
+    dbgraw("memset OK");
 
-	pj_log_set_log_func(&log_func_4pj);
-	pj_log_set_level(PJ_LOG_MAX_LEVEL);
 
     do {
+        
         ret = pj_init();
         if (ret != PJ_SUCCESS) {
-            dbge("pj_init failure, ret=%d", ret);
+            dbgraw("pj_init failure ");
             break;
         }
         g_eice->pj_inited = 1;
-
+        dbgraw("pj_init OK");
+        
+        
+        // create pool factory
+        pj_caching_pool_init(&g_eice->cp, NULL, 0);
+        g_eice->cp_inited = 1;
+        dbgraw("pj_caching_pool_init OK");
+        
+        /* Create application memory pool */
+        g_eice->pool = pj_pool_create(&g_eice->cp.factory, "eice_global_pool",
+                                      512, 512, NULL);
+        dbgraw("pj_pool_create OK");
+        
+        register_eice_thread(g_eice->pool);
+        dbgraw("register_eice_thread  OK");
+        
+        pj_log_set_log_func(&log_func_4pj);
+        dbgraw("pj_log_set_level OK");
+        
+        pj_log_set_level(PJ_LOG_MAX_LEVEL);
+        dbgraw("pj_log_set_level OK");
+        
+        
         ret = pjlib_util_init();
         if (ret != PJ_SUCCESS) {
             dbge("pjlib_util_init failure, ret=%d", ret);
             break;
         }
         g_eice->pjlib_inited = 1;
-
+        dbgraw("pjlib_util_init OK");
+        
         ret = pjnath_init();
         if (ret != PJ_SUCCESS) {
             dbge("pjnath_init failure, ret=%d", ret);
             break;
         }
         g_eice->pjnath_inited = 1;
-        
-        // create pool factory
-        pj_caching_pool_init(&g_eice->cp, NULL, 0);
-        g_eice->cp_inited = 1;
-        
-        
-        /* Create application memory pool */
-        g_eice->pool = pj_pool_create(&g_eice->cp.factory, "eice_global_pool",
-                                       512, 512, NULL);
+        dbgraw("pjnath_init OK");
         
 
+        
         ret = PJ_SUCCESS;
         dbgi("eice init ok");
 
