@@ -30,17 +30,30 @@ public class EIce {
 	}
 	
 	public static EIce newCaller(String config){
-		EIce o = new EIce();
-		o.nativeHandle = o.nativeNewCaller(config);
-		o.localContent = o.nativeGetLocalContent(o.nativeHandle);
-		return o;
+		try{
+			Log.i(TAG, "newCaller: ==>; ");
+			EIce o = new EIce();
+			o.nativeHandle = o.nativeNewCaller(config);
+			o.localContent = o.nativeGetLocalContent(o.nativeHandle);
+			return o;
+		}finally{
+			Log.i(TAG, "newCaller: <==; ");
+		}
+		
 	}
 	
 	public static EIce newCallee(String config, String remoteContent){
-		EIce o = new EIce();
-		o.nativeHandle = o.nativeNewCallee(config, remoteContent);
-		o.localContent = o.nativeGetLocalContent(o.nativeHandle);
-		return o;
+		try{
+			Log.i(TAG, "newCallee: ==>; ");
+			EIce o = new EIce();
+			o.nativeHandle = o.nativeNewCallee(config, remoteContent);
+			o.localContent = o.nativeGetLocalContent(o.nativeHandle);
+			return o;
+		}finally{
+			Log.i(TAG, "newCallee: <==; ");
+		}
+		
+		
 	}
 	
 	public String getLocalContent(){
@@ -52,18 +65,20 @@ public class EIce {
 
 			@Override
 			public void run() {
+				Log.i(TAG, "queryThread start, " + this.hashCode());
 				while(true){
 					
 					String result = nativeGetNegoResult(nativeHandle);
 					
 					
 					if(result != null){
+						Log.i(TAG, "got nego result: " + result);
+						
 						synchronized (EIce.this) {
 							EIce.this.negoResult = result;
 							EIce.this.notifyAll();
 						}
 						
-						Log.i(TAG, "got nego result: " + result);
 						if(listener != null){
 							listener.onNegoResult(result);
 						}
@@ -81,7 +96,7 @@ public class EIce {
 						break;
 					}
 				}
-				Log.i(TAG, "queryThread exit");
+				Log.i(TAG, "queryThread exit; " + this.hashCode());
 			}
 			
 		});
@@ -89,18 +104,46 @@ public class EIce {
 		this.queryThread.start();
 	}
 	
+	
+	private boolean negoing = false;
 	public void callerNego(String remoteContent, final EIceListener listener){
-		this.nativeCallerNego(this.nativeHandle, remoteContent);
-		startQueryResult(listener);
+		Log.i(TAG, "callerNego: ==>; " + this.hashCode());
+		synchronized (this) {
+			if(nativeHandle == 0) throw new IllegalStateException("callerNego handle null");
+			if(negoing){
+				Log.e(TAG, "callerNego: already negoing; " + this.hashCode());
+				return ;
+			}
+			
+			negoing = true;
+			this.nativeCallerNego(this.nativeHandle, remoteContent);
+			startQueryResult(listener);
+			
+		}
+		Log.i(TAG, "callerNego: <==; " + this.hashCode());
 	}
 	
+	
 	public void calleeNego(EIceListener listener){
-		startQueryResult(listener);
+		Log.i(TAG, "calleeNego: ==>; " + this.hashCode());
+		synchronized (this) {
+			if(nativeHandle == 0) throw new IllegalStateException("calleeNego handle null");
+			if(negoing){
+				Log.e(TAG, "calleeNego: already negoing; " + this.hashCode());
+				return ;
+			}
+			negoing = true;
+			startQueryResult(listener);
+		}
+		Log.i(TAG, "calleeNego: <==; " + this.hashCode());
 	}
 	
 	public void waitforNegoResult() throws InterruptedException{
+		Log.i(TAG, "waitforNegoResult: ==>; " + this.hashCode());
 		while(true){
 			synchronized (this) {
+				if(nativeHandle == 0) throw new IllegalStateException("calleeNego handle null");
+				
 				if(this.getNegoResult() == null){
 					this.wait();
 				}else{
@@ -108,17 +151,27 @@ public class EIce {
 				}
 			}
 		}
-		
+		Log.i(TAG, "waitforNegoResult: <==; " + this.hashCode());
 	}
 	
 	public String getNegoResult(){
-		synchronized (EIce.this) {
-			return EIce.this.negoResult;
+		Log.i(TAG, "getNegoResult: ==>; " + this.hashCode());
+		try{
+			synchronized (EIce.this) {
+				return EIce.this.negoResult;
+			}
+		}finally{
+			Log.i(TAG, "getNegoResult: <==; " + this.hashCode());
 		}
+		
 	}
 	
 	public void freeCall(){
+		Log.i(TAG, "freeCall: ==>; " + this.hashCode());
+		if(nativeHandle == 0) throw new IllegalStateException("calleeNego handle null");
+		
 		if(this.queryThread != null){
+			Log.i(TAG, "freeCall: stop query thread... ; " + this.hashCode());
 			this.stopReq = true;
 			try {
 				this.queryThread.join();
@@ -126,10 +179,11 @@ public class EIce {
 				e.printStackTrace();
 			}
 			this.queryThread = null;
-			
+			Log.i(TAG, "freeCall: stop query thread done ; " + this.hashCode());
 		}
 		this.nativeFreeCall(this.nativeHandle);
 		this.nativeHandle = 0;
+		Log.i(TAG, "freeCall: <==; " + this.hashCode());
 	}
 	
 	public static interface EIceListener{

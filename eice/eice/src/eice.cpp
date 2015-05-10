@@ -883,7 +883,11 @@ static int parse_content(eice_t obj, const char * content, int content_len
 
 int eice_start_nego(eice_t obj, const char * remote_content, int remote_content_len){
 	int ret = -1;
+    dbgi("eice_start_nego ---------->");
 	do {
+        
+        dbgi("    remote_content %s", remote_content);
+        
 		// parse remote content
 		std::string ufrag;
 		std::string pwd;
@@ -901,6 +905,8 @@ int eice_start_nego(eice_t obj, const char * remote_content, int remote_content_
 //		pj_cstr(&rpwd, pwd.c_str());
         pj_strdup2_with_null(obj->ice_pool, &rpwd, pwd.c_str());
 
+        dbgi("    icest = 0x%p", obj->icest);
+        dbgi("    remote_cand_count %d", obj->remote_cand_count);
 		ret = pj_ice_strans_start_ice(obj->icest, &rufrag, &rpwd,
 				obj->remote_cand_count, obj->remote_cands);
 		if (ret != 0) {
@@ -909,6 +915,7 @@ int eice_start_nego(eice_t obj, const char * remote_content, int remote_content_
 		}
 		dbgi("start ice OK");
 	} while (0);
+    dbgi("eice_start_nego <----------");
 	return ret;
 }
 
